@@ -13,9 +13,13 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.beefit.app",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.beefit.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -30,7 +34,21 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "BeeFit needs access to your Health data to sync workouts and activity.",
+          "healthUpdatePermission": "BeeFit needs permission to write health data when you log workouts."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#FF9500"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
