@@ -223,7 +223,7 @@ export default function ProfileScreen() {
                 <View style={styles.deviceInfo}>
                   <Text style={styles.deviceName}>Apple Health</Text>
                   <Text style={styles.deviceStatus}>
-                    {isSyncing ? 'Syncing…' : `Last sync: ${lastSyncLabel}`}
+                    {isSyncing ? 'Syncing...' : `Last sync: ${lastSyncLabel}`}
                   </Text>
                 </View>
                 <Switch
@@ -259,7 +259,7 @@ export default function ProfileScreen() {
                 <MaterialIcons name="add-circle-outline" size={24} color="#ec5b13" style={{ marginRight: 8 }} />
               )}
               <Text style={[styles.infoLabel, { color: '#ec5b13', fontWeight: '600' }]}>
-                {connectingDevice ? 'Connecting…' : 'Connect a Device'}
+                {connectingDevice ? 'Connecting...' : 'Connect a Device'}
               </Text>
             </TouchableOpacity>
           )}

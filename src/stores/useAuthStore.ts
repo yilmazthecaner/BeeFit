@@ -6,8 +6,12 @@
  */
 
 import { create } from 'zustand';
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import supabase from '../services/supabase/client';
 import type { UserProfile } from '../types/user';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface AuthState {
   // ── State ──
@@ -22,6 +26,7 @@ interface AuthState {
   initialize: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
   signUpWithEmail: (email: string, password: string, displayName: string) => Promise<boolean>;
+  signInWithOAuth: (provider: 'apple' | 'google') => Promise<boolean>;
   signOut: () => Promise<void>;
   completeOnboarding: (data: OnboardingData) => Promise<boolean>;
   updateProfile: (data: Partial<OnboardingData> & { displayName?: string }) => Promise<boolean>;
@@ -189,6 +194,110 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  signInWithOAuth: async (provider) => {
+    set({ isLoading: true, error: null });
+    try {
+      const redirectTo = Linking.createURL('auth/callback');
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error('OAuth URL not returned.');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type !== 'success' || !result.url) {
+        set({ isLoading: false });
+        return false;
+      }
+
+      const params = parseOAuthParams(result.url);
+      if (params.error) {
+        throw new Error(params.error_description ?? params.error);
+      }
+
+      let session = null;
+      if (params.code) {
+        const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+        if (exchangeError) throw exchangeError;
+        session = exchangeData.session;
+      } else if (params.access_token && params.refresh_token) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+          access_token: params.access_token,
+          refresh_token: params.refresh_token,
+        });
+        if (sessionError) throw sessionError;
+        session = sessionData.session;
+      } else {
+        throw new Error('OAuth completed but no session was returned.');
+      }
+
+      if (!session?.user) throw new Error('OAuth failed to return a user session.');
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile) {
+        set({
+          session: {
+            access_token: session.access_token,
+            user: { id: session.user.id, email: session.user.email ?? '' },
+          },
+          user: mapProfileRow(profile),
+          isAuthenticated: true,
+          isOnboarded: !!profile.fitness_goal,
+          isLoading: false,
+        });
+        return true;
+      }
+
+      const displayName = getOAuthDisplayName(session.user);
+      const avatarUrl = getOAuthAvatarUrl(session.user);
+
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: session.user.id,
+          email: session.user.email ?? '',
+          display_name: displayName,
+          avatar_url: avatarUrl,
+        });
+
+      if (profileError) throw profileError;
+
+      set({
+        session: {
+          access_token: session.access_token,
+          user: { id: session.user.id, email: session.user.email ?? '' },
+        },
+        user: {
+          id: session.user.id,
+          email: session.user.email ?? '',
+          displayName,
+          avatarUrl,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        isAuthenticated: true,
+        isOnboarded: false,
+        isLoading: false,
+      });
+
+      return true;
+    } catch (error) {
+      const message = (error as Error).message || 'OAuth sign-in failed.';
+      set({ error: message, isLoading: false });
+      return false;
+    }
+  },
+
   completeOnboarding: async (onboardingData) => {
     const { session } = get();
     if (!session) return false;
@@ -307,6 +416,42 @@ function mapProfileRow(row: any): UserProfile {
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+function parseOAuthParams(url: string): Record<string, string> {
+  const parsePart = (part?: string) => {
+    if (!part) return {};
+    return part.split('&').reduce<Record<string, string>>((acc, entry) => {
+      if (!entry) return acc;
+      const [rawKey, rawValue] = entry.split('=');
+      const key = decodeURIComponent(rawKey ?? '');
+      const value = decodeURIComponent(rawValue ?? '');
+      if (key) acc[key] = value;
+      return acc;
+    }, {});
+  };
+
+  const [base, hash] = url.split('#');
+  const query = base.split('?')[1];
+  return {
+    ...parsePart(query),
+    ...parsePart(hash),
+  };
+}
+
+function getOAuthDisplayName(user: { email?: string | null; user_metadata?: Record<string, any> }) {
+  const metadata = user.user_metadata ?? {};
+  return (
+    metadata.full_name ||
+    metadata.name ||
+    metadata.first_name ||
+    (user.email ? user.email.split('@')[0] : 'User')
+  );
+}
+
+function getOAuthAvatarUrl(user: { user_metadata?: Record<string, any> }) {
+  const metadata = user.user_metadata ?? {};
+  return metadata.avatar_url || metadata.picture || undefined;
+}
 
 function calculateMacros(data: OnboardingData) {
   // Simplified Mifflin-St Jeor estimation

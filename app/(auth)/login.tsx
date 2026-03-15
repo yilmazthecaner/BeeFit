@@ -29,7 +29,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const { signInWithEmail, signUpWithEmail, isLoading, error, clearError } = useAuthStore();
+  const { signInWithEmail, signUpWithEmail, signInWithOAuth, isLoading, error, clearError } = useAuthStore();
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -52,6 +52,10 @@ export default function LoginScreen() {
     if (success) {
       // Auth store will update isAuthenticated → root layout will redirect
     }
+  };
+
+  const handleOAuth = async (provider: 'apple' | 'google') => {
+    await signInWithOAuth(provider);
   };
 
   return (
@@ -139,7 +143,8 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={[styles.oauthBtn, { backgroundColor: colorScheme === 'dark' ? '#ffffff' : '#000000' }]}
-              onPress={() => Alert.alert('Coming Soon', 'Apple Sign-in is not yet configured.')}
+              onPress={() => handleOAuth('apple')}
+              disabled={isLoading}
               activeOpacity={0.8}
             >
               <MaterialIcons name="apple" size={24} color={colorScheme === 'dark' ? '#000000' : '#ffffff'} />
@@ -150,7 +155,8 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={[styles.oauthBtn, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1 }]}
-              onPress={() => Alert.alert('Coming Soon', 'Google Sign-in is not yet configured.')}
+              onPress={() => handleOAuth('google')}
+              disabled={isLoading}
               activeOpacity={0.8}
             >
               <MaterialIcons name="g-mobiledata" size={26} color={palette.text} />
