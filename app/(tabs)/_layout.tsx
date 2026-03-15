@@ -1,8 +1,8 @@
 /**
- * Tab Navigation Layout — Apple HIG-Inspired
+ * Tab Navigation Layout
  *
- * 4 tabs: Home (AI Coach), Fitness, Nutrition, Profile
- * Uses native iOS tab bar styling with subtle colors.
+ * 4 tabs: Coach, Health (Fitness), Plan (Nutrition), Profile
+ * Matches the Stitch HTML Dashboard bottom navigator.
  */
 
 import React from 'react';
@@ -10,6 +10,7 @@ import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { Colors } from '../../src/constants/theme';
 import { useColorScheme } from '../../components/useColorScheme';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -19,36 +20,38 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        // Apple HIG tab bar styling
         tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: palette.textSecondary,
+        tabBarInactiveTintColor: isDark ? '#64748b' : '#94a3b8', // slate-500 : slate-400
         tabBarStyle: {
           backgroundColor: Platform.OS === 'ios'
-            ? (isDark ? 'rgba(28,28,30,0.92)' : 'rgba(255,255,255,0.92)')
+            ? (isDark ? 'rgba(34, 22, 16, 0.8)' : 'rgba(255, 255, 255, 0.8)')
             : palette.background,
-          borderTopColor: palette.separator,
-          borderTopWidth: 0.5,
-          paddingTop: 4,
-          height: Platform.OS === 'ios' ? 88 : 64,
+          borderTopColor: isDark ? '#1e293b' : '#e2e8f0', // slate-800 : slate-200
+          borderTopWidth: 1,
+          paddingTop: 12,
+          paddingBottom: 24,
+          paddingHorizontal: 24,
+          height: Platform.OS === 'ios' ? 88 : 80,
           ...(Platform.OS === 'ios' && {
-            // iOS blur effect simulation
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -1 },
-            shadowOpacity: isDark ? 0.2 : 0.05,
-            shadowRadius: 8,
+            shadowColor: 'transparent',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0,
+            shadowRadius: 0,
           }),
         },
         tabBarLabelStyle: {
           fontSize: 10,
-          fontWeight: '500',
-          marginTop: 2,
+          fontWeight: '700',
+          textTransform: 'uppercase',
+          letterSpacing: 1,
+          marginTop: 4,
         },
         headerStyle: {
           backgroundColor: palette.background,
         },
         headerTitleStyle: {
           fontSize: 17,
-          fontWeight: '600',
+          fontWeight: '700',
           color: palette.text,
         },
         headerShadowVisible: false,
@@ -60,31 +63,34 @@ export default function TabLayout() {
           title: 'Coach',
           tabBarLabel: 'Coach',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="coach" color={color} size={size} />
+            <MaterialIcons name="chat-bubble" color={color} size={24} />
           ),
           headerTitle: 'BeeFit Coach',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="fitness"
         options={{
-          title: 'Fitness',
-          tabBarLabel: 'Fitness',
+          title: 'Health',
+          tabBarLabel: 'Health',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="fitness" color={color} size={size} />
+            <MaterialIcons name="favorite" color={color} size={24} />
           ),
-          headerTitle: 'Fitness',
+          headerTitle: 'Health',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
         name="nutrition"
         options={{
-          title: 'Nutrition',
-          tabBarLabel: 'Nutrition',
+          title: 'Plan',
+          tabBarLabel: 'Plan',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="nutrition" color={color} size={size} />
+            <MaterialIcons name="event-note" color={color} size={24} />
           ),
-          headerTitle: 'Nutrition',
+          headerTitle: 'Plan',
+          headerShown: false,
         }}
       />
       <Tabs.Screen
@@ -93,33 +99,12 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <TabIcon name="profile" color={color} size={size} />
+            <MaterialIcons name="person" color={color} size={24} />
           ),
           headerTitle: 'Profile',
+          headerShown: false,
         }}
       />
     </Tabs>
-  );
-}
-
-/**
- * Simple emoji-based tab icons.
- * In production, replace with SF Symbols or a custom icon library.
- */
-function TabIcon({ name, color, size }: { name: string; color: string; size: number }) {
-  const React = require('react');
-  const { Text } = require('react-native');
-
-  const icons: Record<string, string> = {
-    coach: '🐝',
-    fitness: '💪',
-    nutrition: '🥗',
-    profile: '👤',
-  };
-
-  return (
-    <Text style={{ fontSize: size - 4, opacity: color === Colors.primary ? 1 : 0.5 }}>
-      {icons[name] ?? '●'}
-    </Text>
   );
 }

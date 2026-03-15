@@ -69,7 +69,7 @@ export async function scheduleWorkoutReminder(existingId?: string | null): Promi
       hour: WORKOUT_REMINDER_TIME.hour,
       minute: WORKOUT_REMINDER_TIME.minute,
       repeats: true,
-    },
+    } as any,
   });
 }
 
@@ -92,7 +92,7 @@ export async function scheduleMealLoggingReminders(existingIds: string[] = []): 
         hour: slot.hour,
         minute: slot.minute,
         repeats: true,
-      },
+      } as any,
     });
     ids.push(id);
   }

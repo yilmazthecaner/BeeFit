@@ -1,26 +1,39 @@
 /**
- * Nutrition Screen — Live with camera and stores
+ * Plan Screen (Nutrition) — Nutrition Vision + History
+ * Matches Stitch "AI Nutrition Vision" & "Nutrition History"
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Alert,
+  ActivityIndicator,
+  Modal,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/constants/theme';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useNutritionStore } from '../../src/stores/useNutritionStore';
 import { VisionAnalyzer } from '../../src/services/ai/visionAnalyzer';
 import type { MealLog } from '../../src/types/nutrition';
 import { useColorScheme } from '../../components/useColorScheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function NutritionScreen() {
   const colorScheme = useColorScheme();
-  const palette = Colors[colorScheme];
-  const styles = useMemo(() => createStyles(palette), [palette]);
+  const isDark = colorScheme === 'dark';
+  const styles = useMemo(() => createStyles(isDark), [isDark]);
 
   const { user } = useAuthStore();
   const { todaysMeals, isLoading: storeLoading, fetchTodaysMeals, getDailyTotals } = useNutritionStore();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingImageUri, setAnalyzingImageUri] = useState<string | null>(null);
 
   const dailyTotals = getDailyTotals();
   const targets = {
@@ -35,79 +48,44 @@ export default function NutritionScreen() {
   }, [user?.id]);
 
   const handleLogMeal = async () => {
-    const mealType = await new Promise<string | null>((resolve) => {
-      Alert.alert('Log a Meal', 'Choose meal type:', [
-        { text: 'Breakfast', onPress: () => resolve('breakfast') },
-        { text: 'Lunch', onPress: () => resolve('lunch') },
-        { text: 'Dinner', onPress: () => resolve('dinner') },
-        { text: 'Snack', onPress: () => resolve('snack') },
-        { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
-      ]);
+    Alert.alert('Log a Meal', 'Add a photo or search for food', [
+      { text: '📸 AI Nutrition Vision', onPress: openCamera },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const openCamera = async () => {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Camera access is needed for AI Vision.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
     });
 
-    if (!mealType) return;
+    if (result.canceled || !result.assets[0]) return;
 
-    // Ask for photo source
-    const source = await new Promise<'camera' | 'library' | null>((resolve) => {
-      Alert.alert('Add Photo', 'How would you like to add your meal photo?', [
-        { text: '📸 Take Photo', onPress: () => resolve('camera') },
-        { text: '🖼️ Choose from Library', onPress: () => resolve('library') },
-        { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
-      ]);
-    });
-
-    if (!source) return;
+    const imageUri = result.assets[0].uri;
+    setAnalyzingImageUri(imageUri);
+    setIsAnalyzing(true);
 
     try {
-      let result: ImagePicker.ImagePickerResult;
-
-      if (source === 'camera') {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert('Permission Required', 'Camera access is needed to take meal photos.');
-          return;
-        }
-        result = await ImagePicker.launchCameraAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
-      } else {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          Alert.alert('Permission Required', 'Photo library access is needed.');
-          return;
-        }
-        result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
-      }
-
-      if (result.canceled || !result.assets[0]) return;
-
-      const imageUri = result.assets[0].uri;
-      setIsAnalyzing(true);
-
       if (user?.id) {
+        // Here we default to 'lunch' for the demo if type is needed
         const analyzer = new VisionAnalyzer(user.id);
-        await analyzer.analyzeAndLogMeal(
-          imageUri,
-          mealType as 'breakfast' | 'lunch' | 'dinner' | 'snack'
-        );
-
-        // Refresh meals
+        await analyzer.analyzeAndLogMeal(imageUri, 'lunch');
         await fetchTodaysMeals(user.id);
-        Alert.alert('Meal Logged! 🐝', 'Your meal has been analyzed and logged successfully.');
+        Alert.alert('Meal Logged! 🐝', 'AI analyzed and logged your meal successfully.');
       }
     } catch (error) {
       Alert.alert('Error', 'Could not analyze the meal. Please try again.');
-      console.error('Meal analysis error:', error);
     } finally {
       setIsAnalyzing(false);
+      setAnalyzingImageUri(null);
     }
   };
 
@@ -123,137 +101,360 @@ export default function NutritionScreen() {
         feedback: m.aiFeedback,
       }))
     : [
-        { id: '1', type: 'Breakfast', time: '8:30 AM', items: 'Oatmeal, banana, almond butter', calories: 520, protein: 18, photoUrl: null, feedback: 'Great fiber-rich start!' },
-        { id: '2', type: 'Lunch', time: '12:45 PM', items: 'Grilled chicken salad', calories: 580, protein: 45, photoUrl: null, feedback: 'Excellent protein!' },
+        {
+          id: '1',
+          type: 'Breakfast',
+          time: '8:30 AM',
+          items: 'Avocado Toast & Eggs',
+          calories: 450,
+          protein: 22,
+          photoUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDB88a47Jpcimg28cy3e7XnZnKQMl0fa_vRd1MOx0ufcd4vw3FMaWOfThZovxZfUZ5rhmvYquoBCtamqEqCTpEvSYgnhgJVuC4IFBNrz34Zz8qmjOFv9ikOiDWEUU-zmCLDOuz8Q7tM0zD3JObv1YZOso_qUlbDqMQF_0l18jFJjnyWDZuJBd32P5XlE7atF9hue-HCvPqEUFnit44Ele_NzPTva78Ih9S9TZwfuBU6sEgO8HKgCNAtyMD0G7Hxlfcy645MbENYF0Zi',
+          feedback: "Great start! Excellent source of healthy fats and protein.",
+        },
+        {
+          id: '2',
+          type: 'Lunch',
+          time: '1:15 PM',
+          items: 'Grilled Salmon Bowl',
+          calories: 620,
+          protein: 45,
+          photoUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBeJ1F6OC1OjiojCiYc-wlyLT6VrEcz6lbOTSFEYslRRMG85giNYppbsSIYvpUNyrAED5QO_gkjg-gO-oqvoltz9GVAfGTYop9DOZlcGdOVJgrJ_EbhNvttf1duJ4Ypt5VYcGpkhpMnFPUC3gPUIcLUSyTZirOVvb2HM8eZT5i2sGtQSRwadlXwnKjyIOGdZUtJIWZgWxo72vYucfSyVhWJG2OhyPSyGpO0JuFSBhUv1dS87sGfzobY2I8CJUlK9ORCnZBozEv6BSM',
+          feedback: "Perfect post-workout recovery meal. High in Omega-3.",
+        },
       ];
 
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Macro Summary */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Daily Nutrition</Text>
-          <View style={styles.calorieRow}>
-            <Text style={styles.calorieVal}>{targets.calories.consumed}</Text>
-            <Text style={styles.calorieTarget}> / {targets.calories.target} kcal</Text>
-          </View>
-          <View style={styles.barBg}>
-            <View style={[styles.barFill, { width: `${Math.min((targets.calories.consumed / targets.calories.target) * 100, 100)}%`, backgroundColor: Colors.ringMove }]} />
-          </View>
-          <Text style={styles.remaining}>{Math.max(targets.calories.target - targets.calories.consumed, 0)} kcal remaining</Text>
+  const renderHeader = () => (
+    <View style={styles.topNav}>
+      <TouchableOpacity style={styles.navButton}>
+        <MaterialIcons name="chevron-left" size={28} color={isDark ? '#cbd5e1' : '#334155'} />
+      </TouchableOpacity>
+      <View style={styles.navTitleContainer}>
+        <Text style={styles.navTitle}>Today</Text>
+        <Text style={styles.navSubtitle}>Nov 12</Text>
+      </View>
+      <TouchableOpacity style={styles.navButton}>
+        <MaterialIcons name="chevron-right" size={28} color={isDark ? '#cbd5e1' : '#334155'} />
+      </TouchableOpacity>
+    </View>
+  );
 
-          <View style={styles.macroRow}>
-            <MacroBar label="Protein" val={targets.protein.consumed} max={targets.protein.target} color={Colors.systemBlue} styles={styles} />
-            <MacroBar label="Carbs" val={targets.carbs.consumed} max={targets.carbs.target} color={Colors.systemOrange} styles={styles} />
-            <MacroBar label="Fat" val={targets.fat.consumed} max={targets.fat.target} color={Colors.systemPurple} styles={styles} />
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {renderHeader()}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Macro Summary Overview */}
+        <View style={styles.overviewSection}>
+          <View style={styles.circularProgressContainer}>
+            <View style={styles.scoreCircle}>
+              <Text style={styles.scoreValue}>{targets.calories.target - targets.calories.consumed}</Text>
+              <Text style={styles.scoreLabel}>CALS LEFT</Text>
+            </View>
+            <View style={styles.overviewLabels}>
+              <View style={styles.overviewRow}>
+                <MaterialIcons name="flag" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+                <Text style={styles.overviewText}>Target: {targets.calories.target}</Text>
+              </View>
+              <View style={styles.overviewRow}>
+                <MaterialIcons name="local-fire-department" size={16} color="#ec5b13" />
+                <Text style={styles.overviewText}>Eaten: {targets.calories.consumed}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.macrosGrid}>
+            <MacroCard label="Protein" consumed={targets.protein.consumed} target={targets.protein.target} unit="g" color="#10b981" styles={styles} />
+            <MacroCard label="Carbs" consumed={targets.carbs.consumed} target={targets.carbs.target} unit="g" color="#3b82f6" styles={styles} />
+            <MacroCard label="Fat" consumed={targets.fat.consumed} target={targets.fat.target} unit="g" color="#f59e0b" styles={styles} />
           </View>
         </View>
 
-        {/* Log Meal CTA */}
-        <TouchableOpacity
-          style={[styles.ctaBtn, isAnalyzing && { opacity: 0.7 }]}
-          onPress={handleLogMeal}
-          activeOpacity={0.8}
-          disabled={isAnalyzing}
-        >
-          {isAnalyzing ? (
-            <>
-              <ActivityIndicator color="#FFF" size="small" />
-              <View style={{ flex: 1, marginLeft: Spacing.md }}>
-                <Text style={styles.ctaTitle}>Analyzing Meal...</Text>
-                <Text style={styles.ctaSub}>AI is identifying your food</Text>
+        {/* Timeline */}
+        <View style={styles.timelineContainer}>
+          {displayMeals.map((m, index) => (
+            <View key={m.id} style={styles.timelineItem}>
+              <View style={styles.timelineLeft}>
+                <Text style={styles.timelineTime}>{m.time}</Text>
+                <View style={[styles.timelineLine, index === displayMeals.length - 1 && styles.timelineLineLast]} />
+                <View style={styles.timelineDot} />
               </View>
-            </>
-          ) : (
-            <>
-              <Text style={styles.ctaIcon}>📸</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.ctaTitle}>Log a Meal</Text>
-                <Text style={styles.ctaSub}>Snap a photo — AI identifies food & calories</Text>
+              <View style={styles.timelineRight}>
+                <View style={styles.mealCard}>
+                  <View style={styles.mealHeader}>
+                    <Text style={styles.mealType}>{m.type}</Text>
+                    <Text style={styles.mealCalories}>{m.calories} kcal</Text>
+                  </View>
+                  <Text style={styles.mealItems}>{m.items}</Text>
+                  {m.photoUrl && (
+                    <Image source={{ uri: m.photoUrl }} style={styles.mealImage} />
+                  )}
+                  {m.feedback && (
+                    <View style={styles.feedbackRow}>
+                      <MaterialIcons name="auto-awesome" size={16} color="#ec5b13" />
+                      <Text style={styles.feedbackText}>{m.feedback}</Text>
+                    </View>
+                  )}
+                  <View style={styles.macrosRow}>
+                    <Text style={styles.macroTag}>P: {m.protein}g</Text>
+                  </View>
+                </View>
               </View>
-              <Text style={styles.ctaArrow}>→</Text>
-            </>
-          )}
-        </TouchableOpacity>
+            </View>
+          ))}
 
-        {/* Meal Timeline */}
-        <Text style={styles.sectionTitle}>Today's Meals</Text>
-        {displayMeals.map((m) => (
-          <View key={m.id} style={styles.mealCard}>
-            <View style={styles.mealHeader}>
-              <View style={styles.badge}><Text style={styles.badgeText}>{m.type}</Text></View>
-              <Text style={styles.mealTime}>{m.time}</Text>
+          {/* Dinner CTA */}
+          <View style={styles.timelineItem}>
+            <View style={styles.timelineLeft}>
+              <View style={[styles.timelineDot, styles.timelineDotEmpty]} />
             </View>
-            {m.photoUrl && (
-              <Image source={{ uri: m.photoUrl }} style={styles.mealPhoto} resizeMode="cover" />
-            )}
-            <Text style={styles.mealItems}>{m.items}</Text>
-            <View style={styles.mealStats}>
-              <Text style={styles.statVal}>{m.calories} <Text style={styles.statLabel}>kcal</Text></Text>
-              <View style={styles.divider} />
-              <Text style={styles.statVal}>{m.protein}g <Text style={styles.statLabel}>protein</Text></Text>
+            <View style={styles.timelineRight}>
+              <TouchableOpacity
+                style={styles.addMealButton}
+                activeOpacity={0.8}
+                onPress={handleLogMeal}
+              >
+                <MaterialIcons name="add" size={20} color="#ec5b13" />
+                <Text style={styles.addMealText}>Log Dinner</Text>
+              </TouchableOpacity>
             </View>
-            {m.feedback && (
-              <View style={styles.feedback}>
-                <Text style={{ fontSize: 14 }}>🐝</Text>
-                <Text style={styles.feedbackText}>{m.feedback}</Text>
-              </View>
-            )}
           </View>
-        ))}
+        </View>
       </ScrollView>
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.9}
+        onPress={handleLogMeal}
+      >
+        <MaterialIcons name="center-focus-strong" size={28} color="#ffffff" />
+      </TouchableOpacity>
+
+      {/* AI Vision Modal overlay */}
+      <Modal visible={isAnalyzing} transparent animationType="fade">
+        <View style={styles.visionModalOverlay}>
+          {analyzingImageUri && (
+            <Image source={{ uri: analyzingImageUri }} style={StyleSheet.absoluteFillObject} blurRadius={10} />
+          )}
+          <View style={styles.visionModalOverlayBg} />
+          
+          <View style={styles.visionScannerBox}>
+            <ActivityIndicator size="large" color="#ec5b13" style={{ marginBottom: 24 }} />
+            <MaterialIcons name="auto-awesome" size={48} color="#ec5b13" />
+            <Text style={styles.visionScanningTitle}>AI Vision Analysis</Text>
+            <Text style={styles.visionScanningText}>Identifying food items and estimating macronutrients...</Text>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
-function MacroBar({ label, val, max, color, styles }: { label: string; val: number; max: number; color: string; styles: Styles }) {
+function MacroCard({ label, consumed, target, unit, color, styles }: any) {
+  const percent = Math.min((consumed / target) * 100, 100);
   return (
-    <View style={{ flex: 1 }}>
-      <Text style={styles.macroLabel}>{label}</Text>
-      <View style={styles.macroBarBg}>
-        <View style={[styles.macroBarFill, { width: `${Math.min((val / max) * 100, 100)}%`, backgroundColor: color }]} />
+    <View style={styles.macroCard}>
+      <Text style={styles.macroCardLabel}>{label}</Text>
+      <View style={styles.macroTrack}>
+        <View style={[styles.macroFill, { width: `${percent}%`, backgroundColor: color }]} />
       </View>
-      <Text style={styles.macroVal}>{val}/{max}g</Text>
+      <Text style={styles.macroCardValue}>{consumed} / {target}{unit}</Text>
     </View>
   );
 }
 
-type Palette = typeof Colors.light;
 type Styles = ReturnType<typeof createStyles>;
 
-const createStyles = (palette: Palette) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: palette.groupedBackground },
-  scroll: { padding: Spacing.md, paddingBottom: Spacing.xxl },
-  card: { backgroundColor: palette.surfaceElevated, borderRadius: BorderRadius.lg, padding: Spacing.lg, marginBottom: Spacing.md, ...Shadows.md },
-  cardTitle: { ...Typography.headline, color: palette.text, marginBottom: Spacing.md },
-  calorieRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: Spacing.sm },
-  calorieVal: { fontSize: 36, fontWeight: '700', color: palette.text },
-  calorieTarget: { ...Typography.body, color: palette.textSecondary },
-  barBg: { height: 8, backgroundColor: palette.fill, borderRadius: 4, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 4 },
-  remaining: { ...Typography.caption1, color: palette.textSecondary, marginTop: Spacing.xs, marginBottom: Spacing.lg },
-  macroRow: { flexDirection: 'row', gap: Spacing.md },
-  macroLabel: { ...Typography.caption2, color: palette.textSecondary, fontWeight: '600', marginBottom: 4 },
-  macroBarBg: { height: 6, backgroundColor: palette.fill, borderRadius: 3, overflow: 'hidden', marginBottom: 4 },
-  macroBarFill: { height: '100%', borderRadius: 3 },
-  macroVal: { ...Typography.caption2, color: palette.text, fontWeight: '600' },
-  ctaBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primary, borderRadius: BorderRadius.lg, padding: Spacing.lg, marginBottom: Spacing.lg, ...Shadows.md },
-  ctaIcon: { fontSize: 28, marginRight: Spacing.md },
-  ctaTitle: { ...Typography.headline, color: '#FFF' },
-  ctaSub: { ...Typography.caption1, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
-  ctaArrow: { fontSize: 20, color: '#FFF', fontWeight: '700' },
-  sectionTitle: { ...Typography.headline, color: palette.text, marginBottom: Spacing.md },
-  mealCard: { backgroundColor: palette.surfaceElevated, borderRadius: BorderRadius.lg, padding: Spacing.lg, marginBottom: Spacing.md, ...Shadows.sm },
-  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm },
-  badge: { backgroundColor: Colors.primary + '15', paddingHorizontal: 10, paddingVertical: 3, borderRadius: BorderRadius.full },
-  badgeText: { ...Typography.caption1, color: Colors.primary, fontWeight: '600' },
-  mealTime: { ...Typography.caption1, color: palette.textSecondary },
-  mealPhoto: { width: '100%', height: 180, borderRadius: BorderRadius.md, marginBottom: Spacing.sm },
-  mealItems: { ...Typography.body, color: palette.text, marginBottom: Spacing.sm },
-  mealStats: { flexDirection: 'row', alignItems: 'center', paddingTop: Spacing.sm, borderTopWidth: 0.5, borderTopColor: palette.separator },
-  statVal: { ...Typography.headline, color: palette.text },
-  statLabel: { ...Typography.caption1, color: palette.textSecondary, fontWeight: '400' },
-  divider: { width: 1, height: 16, backgroundColor: palette.separator, marginHorizontal: Spacing.md },
-  feedback: { flexDirection: 'row', backgroundColor: Colors.primary + '08', borderRadius: BorderRadius.md, padding: Spacing.sm, marginTop: Spacing.sm, gap: Spacing.sm },
-  feedbackText: { ...Typography.footnote, color: palette.textSecondary, flex: 1, lineHeight: 18 },
-});
+const createStyles = (isDark: boolean) => {
+  const bgMain = isDark ? '#221610' : '#f8f6f6';
+  const textMain = isDark ? '#f1f5f9' : '#0f172a';
+  const textMuted = isDark ? '#94a3b8' : '#64748b';
+  const cardBg = isDark ? 'rgba(15, 23, 42, 0.5)' : '#ffffff';
+  const borderColor = isDark ? '#1e293b' : '#e2e8f0';
+  const primary = '#ec5b13';
+
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: bgMain },
+    topNav: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: isDark ? 'rgba(34, 22, 16, 0.8)' : 'rgba(248, 246, 246, 0.8)',
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(236, 91, 19, 0.1)',
+    },
+    navButton: { padding: 8 },
+    navTitleContainer: { alignItems: 'center' },
+    navTitle: { fontSize: 18, fontWeight: '700', color: textMain },
+    navSubtitle: { fontSize: 12, color: primary, fontWeight: '600' },
+    scroll: { paddingBottom: 120 },
+
+    // Overview Section
+    overviewSection: {
+      padding: 24,
+      backgroundColor: isDark ? 'rgba(34, 22, 16, 0.5)' : '#ffffff',
+      borderBottomWidth: 1,
+      borderBottomColor: borderColor,
+    },
+    circularProgressContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 32,
+      marginBottom: 32,
+    },
+    scoreCircle: {
+      width: 140,
+      height: 140,
+      borderRadius: 70,
+      borderWidth: 8,
+      borderColor: primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    scoreValue: {
+      fontSize: 36,
+      fontWeight: '800',
+      color: textMain,
+      letterSpacing: -1,
+    },
+    scoreLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: textMuted,
+      letterSpacing: 1,
+    },
+    overviewLabels: { gap: 12 },
+    overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    overviewText: { fontSize: 14, fontWeight: '600', color: textMuted },
+    macrosGrid: { flexDirection: 'row', gap: 12 },
+    macroCard: {
+      flex: 1,
+      backgroundColor: isDark ? '#1e293b' : '#f8fafc',
+      padding: 12,
+      borderRadius: 12,
+    },
+    macroCardLabel: { fontSize: 12, fontWeight: '600', color: textMuted, marginBottom: 8 },
+    macroTrack: { height: 6, backgroundColor: isDark ? '#334155' : '#e2e8f0', borderRadius: 3, marginBottom: 8, overflow: 'hidden' },
+    macroFill: { height: '100%', borderRadius: 3 },
+    macroCardValue: { fontSize: 12, fontWeight: '700', color: textMain },
+
+    // Timeline
+    timelineContainer: { padding: 24 },
+    timelineItem: { flexDirection: 'row', marginBottom: 24 },
+    timelineLeft: { width: 60, alignItems: 'center' },
+    timelineTime: { fontSize: 12, fontWeight: '600', color: textMuted, marginBottom: 8 },
+    timelineDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: primary,
+      position: 'absolute',
+      top: 24,
+      zIndex: 2,
+    },
+    timelineDotEmpty: { backgroundColor: isDark ? '#334155' : '#cbd5e1', top: 0 },
+    timelineLine: { width: 2, backgroundColor: isDark ? '#334155' : '#e2e8f0', flex: 1, position: 'absolute', top: 32, bottom: -24, zIndex: 1 },
+    timelineLineLast: { bottom: 0 },
+    timelineRight: { flex: 1, paddingTop: 16 },
+    
+    mealCard: {
+      backgroundColor: cardBg,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: borderColor,
+      padding: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    mealType: { fontSize: 16, fontWeight: '700', color: textMain },
+    mealCalories: { fontSize: 14, fontWeight: '600', color: primary },
+    mealItems: { fontSize: 14, color: textMuted, marginBottom: 12 },
+    mealImage: { width: '100%', height: 160, borderRadius: 12, marginBottom: 12 },
+    feedbackRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(236,91,19,0.1)', padding: 12, borderRadius: 8, marginBottom: 12 },
+    feedbackText: { flex: 1, fontSize: 13, color: textMain, lineHeight: 18 },
+    macrosRow: { flexDirection: 'row', gap: 8 },
+    macroTag: { backgroundColor: isDark ? '#1e293b' : '#f1f5f9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, fontSize: 12, fontWeight: '600', color: textMuted },
+
+    // Add Meal
+    addMealButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 16,
+      borderWidth: 2,
+      borderStyle: 'dashed',
+      borderColor: isDark ? '#334155' : '#cbd5e1',
+      borderRadius: 16,
+    },
+    addMealText: { fontSize: 16, fontWeight: '600', color: textMuted },
+
+    // FAB
+    fab: {
+      position: 'absolute',
+      bottom: 24,
+      alignSelf: 'center',
+      backgroundColor: primary,
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: primary,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.3,
+      shadowRadius: 16,
+      elevation: 8,
+    },
+
+    // Vision Modal
+    visionModalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    visionModalOverlayBg: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.7)',
+    },
+    visionScannerBox: {
+      alignItems: 'center',
+      padding: 32,
+      backgroundColor: isDark ? '#0f172a' : '#ffffff',
+      borderRadius: 24,
+      borderWidth: 2,
+      borderColor: primary,
+      width: '80%',
+      shadowColor: primary,
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.5,
+      shadowRadius: 24,
+      elevation: 24,
+    },
+    visionScanningTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? '#ffffff' : '#0f172a',
+      marginTop: 24,
+      marginBottom: 8,
+    },
+    visionScanningText: {
+      fontSize: 14,
+      color: isDark ? '#94a3b8' : '#64748b',
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+  });
+};

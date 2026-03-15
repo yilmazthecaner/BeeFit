@@ -10,9 +10,9 @@
 
 export const Colors = {
   // ── Primary Brand ──
-  primary: '#FF9500',        // Honey/Bee amber
-  primaryLight: '#FFB340',
-  primaryDark: '#CC7700',
+  primary: '#ec5b13',        // Stitch Primary
+  primaryLight: '#f68e57',
+  primaryDark: '#c2480d',
 
   // ── iOS System Colors ──
   systemBlue: '#007AFF',
@@ -33,28 +33,28 @@ export const Colors = {
 
   // ── Neutral Palette (Light Mode) ──
   light: {
-    background: '#FFFFFF',
-    surface: '#F2F2F7',
+    background: '#f8f6f6',
+    surface: '#FFFFFF',
     surfaceElevated: '#FFFFFF',
-    text: '#000000',
-    textSecondary: '#8E8E93',
-    textTertiary: '#C7C7CC',
-    separator: '#C6C6C8',
-    groupedBackground: '#F2F2F7',
-    fill: 'rgba(120,120,128,0.2)',
+    text: '#0f172a',          // slate-900
+    textSecondary: '#64748b',   // slate-500
+    textTertiary: '#cbd5e1',    // slate-300
+    separator: '#e2e8f0',       // slate-200
+    groupedBackground: '#f8f6f6',
+    fill: 'rgba(236, 91, 19, 0.1)', // primary/10
   },
 
   // ── Neutral Palette (Dark Mode) ──
   dark: {
-    background: '#000000',
-    surface: '#1C1C1E',
-    surfaceElevated: '#2C2C2E',
-    text: '#FFFFFF',
-    textSecondary: '#8E8E93',
-    textTertiary: '#48484A',
-    separator: '#38383A',
-    groupedBackground: '#000000',
-    fill: 'rgba(120,120,128,0.36)',
+    background: '#221610',
+    surface: 'rgba(15, 23, 42, 0.5)', // slate-900/50
+    surfaceElevated: '#1e293b',       // slate-800
+    text: '#f1f5f9',                  // slate-100
+    textSecondary: '#94a3b8',         // slate-400
+    textTertiary: '#475569',          // slate-600
+    separator: '#1e293b',             // slate-800
+    groupedBackground: '#221610',
+    fill: 'rgba(236, 91, 19, 0.2)',
   },
 } as const;
 

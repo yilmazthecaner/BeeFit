@@ -1,12 +1,11 @@
 /**
- * Fitness Screen
+ * Fitness / Health Screen — Smart Fitness Tracker (Stitch Design)
  *
- * Dashboard showing:
- * - Today's workout plan (from AI-generated plan)
- * - Workout completion cards
- * - Weekly activity summary
- * - Recent workout history
- * - Wearable sync status
+ * Sections:
+ * - Header with fitness icon + date
+ * - Apple Watch Stats (heart rate, calories) in 2-col grid
+ * - Generate Dynamic Workout CTA
+ * - Today's Plan with workout items (images, tags)
  */
 
 import React, { useMemo, useState } from 'react';
@@ -16,194 +15,220 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/constants/theme';
 import { useColorScheme } from '../../components/useColorScheme';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 // ════════════════════════════════════════
-// MOCK DATA (replaced by Zustand stores in production)
+// MOCK DATA
 // ════════════════════════════════════════
 
-const todaysPlan = {
-  title: 'Upper Body Push',
-  estimatedDuration: 45,
-  exercises: [
-    { name: 'Bench Press', sets: 4, reps: 8, weight: '80 kg' },
-    { name: 'Overhead Press', sets: 3, reps: 10, weight: '40 kg' },
-    { name: 'Incline DB Press', sets: 3, reps: 12, weight: '24 kg' },
-    { name: 'Lateral Raises', sets: 3, reps: 15, weight: '8 kg' },
-    { name: 'Tricep Pushdowns', sets: 3, reps: 12, weight: '25 kg' },
-  ],
+const watchStats = {
+  heartRate: { value: 72, unit: 'BPM', change: '+5%', label: 'Heart Rate' },
+  calories: { value: 450, unit: 'kcal', change: '-2%', label: 'Active Calories' },
 };
 
-const weeklyProgress = [
-  { day: 'Mon', completed: true, type: 'Chest' },
-  { day: 'Tue', completed: true, type: 'Back' },
-  { day: 'Wed', completed: false, type: 'Rest' },
-  { day: 'Thu', completed: false, type: 'Legs' },
-  { day: 'Fri', completed: false, type: 'Shoulders' },
-  { day: 'Sat', completed: false, type: 'Arms' },
-  { day: 'Sun', completed: false, type: 'Rest' },
-];
-
-const recentWorkouts = [
+const todaysWorkouts = [
   {
     id: '1',
-    title: 'Back & Biceps',
-    type: 'strength',
-    duration: 52,
-    calories: 420,
-    date: 'Yesterday',
-    source: 'Apple Watch',
+    title: 'Morning Yoga',
+    duration: '20 mins',
+    intensity: 'Low Intensity',
+    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDB88a47Jpcimg28cy3e7XnZnKQMl0fa_vRd1MOx0ufcd4vw3FMaWOfThZovxZfUZ5rhmvYquoBCtamqEqCTpEvSYgnhgJVuC4IFBNrz34Zz8qmjOFv9ikOiDWEUU-zmCLDOuz8Q7tM0zD3JObv1YZOso_qUlbDqMQF_0l18jFJjnyWDZuJBd32P5XlE7atF9hue-HCvPqEUFnit44Ele_NzPTva78Ih9S9TZwfuBU6sEgO8HKgCNAtyMD0G7Hxlfcy645MbENYF0Zi',
+    tags: ['Flexibility', 'Beginner'],
   },
   {
     id: '2',
-    title: 'Chest & Triceps',
-    type: 'strength',
-    duration: 48,
-    calories: 380,
-    date: '2 days ago',
-    source: 'Manual',
+    title: 'Full Body Strength',
+    duration: '45 mins',
+    intensity: 'High Intensity',
+    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBeJ1F6OC1OjiojCiYc-wlyLT6VrEcz6lbOTSFEYslRRMG85giNYppbsSIYvpUNyrAED5QO_gkjg-gO-oqvoltz9GVAfGTYop9DOZlcGdOVJgrJ_EbhNvttf1duJ4Ypt5VYcGpkhpMnFPUC3gPUIcLUSyTZirOVvb2HM8eZT5i2sGtQSRwadlXwnKjyIOGdZUtJIWZgWxo72vYucfSyVhWJG2OhyPSyGpO0JuFSBhUv1dS87sGfzobY2I8CJUlK9ORCnZBozEv6BSM',
+    tags: ['Strength', 'Advanced'],
+    isHighlight: true,
   },
   {
     id: '3',
-    title: 'Morning Run',
-    type: 'cardio',
-    duration: 32,
-    calories: 310,
-    date: '3 days ago',
-    source: 'Apple Watch',
+    title: 'Evening HIIT',
+    duration: '15 mins',
+    intensity: 'Intense',
+    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDI9JknLAESf0yhqSAll8-nKsTmN0rBPbiNucryE6mmA_3hzXyNw-dco9wnnLmgecMnkptZ8AtsqD3SnHZ_VpiBEXB4-_zkpT3BsSsrwGVvoldtpG7KbRzJQUPudds1flmgiztgNEqzaLXFWSZC5CY2_6ycctCCOJfyMRjolqT_EPfiws-d1AWWGRbyMuSF750_FCArrIjOnnUQ0Uv1bBTovgRXOInMzTFmdIH-gdtCU5CkKvFK_akZ_d73KFpMd8ckR__5cnbjA3E7',
+    tags: ['Cardio'],
   },
 ];
 
+const todayDate = new Date().toLocaleDateString('en-US', {
+  weekday: 'long',
+  month: 'short',
+  day: 'numeric',
+});
+
 // ════════════════════════════════════════
-// SCREEN COMPONENT
+// SCREEN
 // ════════════════════════════════════════
 
 export default function FitnessScreen() {
   const colorScheme = useColorScheme();
-  const palette = Colors[colorScheme];
-  const styles = useMemo(() => createStyles(palette), [palette]);
+  const isDark = colorScheme === 'dark';
+  const styles = useMemo(() => createStyles(isDark), [isDark]);
+  const router = useRouter();
 
-  const [selectedExercise, setSelectedExercise] = useState<number | null>(null);
+  const handleGenerateWorkout = () => {
+    Alert.alert(
+      'Generate Workout',
+      'AI will create a personalized workout based on your Apple Watch data and recovery status.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Generate', onPress: () => Alert.alert('✨ Workout Generated!', 'Your dynamic workout plan is ready.') },
+      ]
+    );
+  };
+
+  const handleWorkoutPress = (workout: typeof todaysWorkouts[0]) => {
+    (router.push as any)({
+      pathname: '/workout-detail',
+      params: { title: workout.title },
+    });
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconBg}>
+            <MaterialIcons name="fitness-center" size={22} color="#ec5b13" />
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>Fitness Pro</Text>
+            <Text style={styles.headerDate}>{todayDate}</Text>
+          </View>
+        </View>
+        <TouchableOpacity style={styles.profileButton}>
+          <MaterialIcons name="person" size={22} color="#ec5b13" />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
-        style={styles.flex}
+        style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Today's Workout Card ── */}
-        <View style={styles.workoutCard}>
-          <View style={styles.workoutHeader}>
-            <View>
-              <Text style={styles.workoutLabel}>TODAY'S WORKOUT</Text>
-              <Text style={styles.workoutTitle}>{todaysPlan.title}</Text>
+        {/* Apple Watch Stats */}
+        <View style={styles.statsSection}>
+          <View style={styles.statsHeaderRow}>
+            <View style={styles.statsHeaderLeft}>
+              <MaterialIcons name="watch" size={16} color={isDark ? '#94a3b8' : '#64748b'} />
+              <Text style={styles.statsLabel}>APPLE WATCH STATS</Text>
             </View>
-            <View style={styles.durationBadge}>
-              <Text style={styles.durationText}>
-                {todaysPlan.estimatedDuration} min
-              </Text>
+            <View style={styles.liveBadge}>
+              <Text style={styles.liveBadgeText}>Live</Text>
             </View>
           </View>
 
-          {/* Exercise List */}
-          {todaysPlan.exercises.map((exercise, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.exerciseRow,
-                selectedExercise === index && styles.exerciseRowSelected,
-              ]}
-              onPress={() =>
-                setSelectedExercise(
-                  selectedExercise === index ? null : index
-                )
-              }
-              activeOpacity={0.7}
-            >
-              <View style={styles.exerciseIndex}>
-                <Text style={styles.exerciseIndexText}>{index + 1}</Text>
+          <View style={styles.statsGrid}>
+            {/* Heart Rate */}
+            <View style={styles.statCard}>
+              <View style={styles.statCardHeader}>
+                <MaterialIcons name="favorite" size={22} color="#ef4444" />
+                <Text style={styles.changePositive}>{watchStats.heartRate.change}</Text>
               </View>
-              <View style={styles.exerciseInfo}>
-                <Text style={styles.exerciseName}>{exercise.name}</Text>
-                <Text style={styles.exerciseDetail}>
-                  {exercise.sets}×{exercise.reps} · {exercise.weight}
-                </Text>
-              </View>
-              <Text style={styles.exerciseCheckmark}>
-                {selectedExercise === index ? '✓' : ''}
+              <Text style={styles.statValue}>
+                {watchStats.heartRate.value}{' '}
+                <Text style={styles.statUnit}>{watchStats.heartRate.unit}</Text>
               </Text>
+              <Text style={styles.statLabel}>{watchStats.heartRate.label}</Text>
+            </View>
+
+            {/* Calories */}
+            <View style={styles.statCard}>
+              <View style={styles.statCardHeader}>
+                <MaterialIcons name="local-fire-department" size={22} color="#ec5b13" />
+                <Text style={styles.changePrimary}>{watchStats.calories.change}</Text>
+              </View>
+              <Text style={styles.statValue}>
+                {watchStats.calories.value}{' '}
+                <Text style={styles.statUnit}>{watchStats.calories.unit}</Text>
+              </Text>
+              <Text style={styles.statLabel}>{watchStats.calories.label}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Generate Workout CTA */}
+        <TouchableOpacity
+          style={styles.generateBtn}
+          activeOpacity={0.8}
+          onPress={handleGenerateWorkout}
+        >
+          <MaterialIcons name="auto-awesome" size={24} color="#ffffff" />
+          <Text style={styles.generateBtnText}>Generate Dynamic Workout</Text>
+        </TouchableOpacity>
+
+        {/* Today's Plan */}
+        <View style={styles.planSection}>
+          <View style={styles.planHeaderRow}>
+            <Text style={styles.planTitle}>Today's Plan</Text>
+            <TouchableOpacity>
+              <Text style={styles.viewAllText}>View All</Text>
+            </TouchableOpacity>
+          </View>
+
+          {todaysWorkouts.map((workout) => (
+            <TouchableOpacity
+              key={workout.id}
+              style={styles.workoutCard}
+              activeOpacity={0.7}
+              onPress={() => handleWorkoutPress(workout)}
+            >
+              <View style={styles.workoutImageContainer}>
+                <Image
+                  source={{ uri: workout.image }}
+                  style={styles.workoutImage}
+                />
+              </View>
+              <View style={styles.workoutInfo}>
+                <Text style={styles.workoutTitle}>{workout.title}</Text>
+                <Text style={styles.workoutMeta}>
+                  {workout.duration} • {workout.intensity}
+                </Text>
+                <View style={styles.tagsRow}>
+                  {workout.tags.map((tag) => (
+                    <View
+                      key={tag}
+                      style={[
+                        styles.tag,
+                        workout.isHighlight && tag === workout.tags[0]
+                          ? styles.tagHighlight
+                          : null,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.tagText,
+                          workout.isHighlight && tag === workout.tags[0]
+                            ? styles.tagTextHighlight
+                            : null,
+                        ]}
+                      >
+                        {tag}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+              <TouchableOpacity style={styles.moreButton}>
+                <MaterialIcons
+                  name="more-vert"
+                  size={20}
+                  color={isDark ? '#64748b' : '#94a3b8'}
+                />
+              </TouchableOpacity>
             </TouchableOpacity>
           ))}
-
-          <TouchableOpacity style={styles.startButton} activeOpacity={0.8}>
-            <Text style={styles.startButtonText}>Start Workout</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Weekly Progress ── */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>This Week</Text>
-          <View style={styles.weekRow}>
-            {weeklyProgress.map((day, index) => (
-              <View key={index} style={styles.dayColumn}>
-                <View
-                  style={[
-                    styles.dayDot,
-                    day.completed && styles.dayDotCompleted,
-                    day.type === 'Rest' && styles.dayDotRest,
-                  ]}
-                >
-                  {day.completed && (
-                    <Text style={styles.dayCheckmark}>✓</Text>
-                  )}
-                </View>
-                <Text style={styles.dayLabel}>{day.day}</Text>
-                <Text style={styles.dayType}>{day.type}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* ── Recent Workouts ── */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Recent Workouts</Text>
-          {recentWorkouts.map((workout) => (
-            <View key={workout.id} style={styles.workoutHistoryRow}>
-              <View style={styles.workoutHistoryIcon}>
-                <Text style={styles.workoutHistoryEmoji}>
-                  {workout.type === 'strength' ? '🏋️' : '🏃'}
-                </Text>
-              </View>
-              <View style={styles.workoutHistoryInfo}>
-                <Text style={styles.workoutHistoryTitle}>
-                  {workout.title}
-                </Text>
-                <Text style={styles.workoutHistoryMeta}>
-                  {workout.duration} min · {workout.calories} kcal ·{' '}
-                  {workout.date}
-                </Text>
-              </View>
-              <View style={styles.sourceBadge}>
-                <Text style={styles.sourceText}>
-                  {workout.source === 'Apple Watch' ? '⌚' : '✏️'}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* ── Sync Status ── */}
-        <View style={styles.syncCard}>
-          <Text style={styles.syncIcon}>⌚</Text>
-          <View style={styles.syncInfo}>
-            <Text style={styles.syncTitle}>Apple Watch Connected</Text>
-            <Text style={styles.syncDetail}>Last synced 5 min ago</Text>
-          </View>
-          <View style={styles.syncDot} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -214,240 +239,239 @@ export default function FitnessScreen() {
 // STYLES
 // ════════════════════════════════════════
 
-type Palette = typeof Colors.light;
+const createStyles = (isDark: boolean) => {
+  const bgMain = isDark ? '#221610' : '#f8f6f6';
+  const textMain = isDark ? '#f1f5f9' : '#0f172a';
+  const textMuted = isDark ? '#94a3b8' : '#64748b';
+  const cardBg = isDark ? '#0f172a' : '#ffffff';
+  const borderColor = isDark ? '#1e293b' : '#e2e8f0';
+  const primary = '#ec5b13';
 
-const createStyles = (palette: Palette) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: palette.groupedBackground,
-  },
-  flex: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.md,
-    paddingBottom: Spacing.xxl,
-  },
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: bgMain,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 24,
+      paddingVertical: 16,
+      backgroundColor: isDark ? 'rgba(15, 23, 42, 0.5)' : '#ffffff',
+      borderBottomWidth: 1,
+      borderBottomColor: borderColor,
+    },
+    headerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    headerIconBg: {
+      backgroundColor: 'rgba(236, 91, 19, 0.1)',
+      padding: 8,
+      borderRadius: 8,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: textMain,
+    },
+    headerDate: {
+      fontSize: 12,
+      color: textMuted,
+    },
+    profileButton: {
+      backgroundColor: 'rgba(236, 91, 19, 0.1)',
+      padding: 8,
+      borderRadius: 9999,
+    },
+    scrollContent: {
+      paddingBottom: 100,
+    },
 
-  // ── Workout Card ──
-  workoutCard: {
-    backgroundColor: palette.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    ...Shadows.md,
-  },
-  workoutHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.md,
-  },
-  workoutLabel: {
-    ...Typography.caption1,
-    color: Colors.primary,
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  workoutTitle: {
-    ...Typography.title2,
-    color: palette.text,
-  },
-  durationBadge: {
-    backgroundColor: Colors.primary + '15',
-    paddingHorizontal: Spacing.sm + 4,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-  },
-  durationText: {
-    ...Typography.caption1,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
+    // ── Apple Watch Stats ──
+    statsSection: {
+      padding: 24,
+    },
+    statsHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    statsHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    statsLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+    },
+    liveBadge: {
+      backgroundColor: isDark ? '#1e293b' : '#e2e8f0',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    liveBadgeText: {
+      fontSize: 10,
+      color: textMuted,
+    },
+    statsGrid: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: cardBg,
+      padding: 20,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: borderColor,
+    },
+    statCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    changePositive: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: '#22c55e',
+    },
+    changePrimary: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: primary,
+    },
+    statValue: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: textMain,
+      letterSpacing: -0.5,
+    },
+    statUnit: {
+      fontSize: 14,
+      fontWeight: '400',
+      color: isDark ? '#64748b' : '#94a3b8',
+    },
+    statLabel: {
+      fontSize: 12,
+      color: textMuted,
+      marginTop: 4,
+    },
 
-  // ── Exercises ──
-  exerciseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm + 2,
-    borderBottomWidth: 0.5,
-    borderBottomColor: palette.separator,
-  },
-  exerciseRowSelected: {
-    backgroundColor: Colors.systemGreen + '10',
-    borderRadius: BorderRadius.sm,
-    marginHorizontal: -Spacing.xs,
-    paddingHorizontal: Spacing.xs,
-  },
-  exerciseIndex: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: palette.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.sm,
-  },
-  exerciseIndexText: {
-    ...Typography.caption1,
-    fontWeight: '600',
-    color: palette.textSecondary,
-  },
-  exerciseInfo: {
-    flex: 1,
-  },
-  exerciseName: {
-    ...Typography.body,
-    color: palette.text,
-  },
-  exerciseDetail: {
-    ...Typography.caption1,
-    color: palette.textSecondary,
-    marginTop: 2,
-  },
-  exerciseCheckmark: {
-    fontSize: 18,
-    color: Colors.systemGreen,
-    fontWeight: '700',
-  },
+    // ── Generate Workout CTA ──
+    generateBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: primary,
+      marginHorizontal: 24,
+      marginBottom: 32,
+      paddingVertical: 16,
+      paddingHorizontal: 24,
+      borderRadius: 12,
+      gap: 12,
+      shadowColor: primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    generateBtnText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#ffffff',
+    },
 
-  // ── Start Button ──
-  startButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
-    paddingVertical: Spacing.md,
-    alignItems: 'center',
-    marginTop: Spacing.lg,
-  },
-  startButtonText: {
-    ...Typography.headline,
-    color: '#FFFFFF',
-  },
+    // ── Today's Plan ──
+    planSection: {
+      paddingHorizontal: 24,
+    },
+    planHeaderRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 16,
+    },
+    planTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: textMain,
+    },
+    viewAllText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: primary,
+    },
 
-  // ── Section Card ──
-  sectionCard: {
-    backgroundColor: palette.surfaceElevated,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
-    ...Shadows.sm,
-  },
-  sectionTitle: {
-    ...Typography.headline,
-    color: palette.text,
-    marginBottom: Spacing.md,
-  },
-
-  // ── Weekly Progress ──
-  weekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dayColumn: {
-    alignItems: 'center',
-  },
-  dayDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: palette.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: palette.separator,
-    marginBottom: Spacing.xs,
-  },
-  dayDotCompleted: {
-    backgroundColor: Colors.systemGreen,
-    borderColor: Colors.systemGreen,
-  },
-  dayDotRest: {
-    borderColor: palette.textTertiary,
-    borderStyle: 'dashed',
-  },
-  dayCheckmark: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  dayLabel: {
-    ...Typography.caption1,
-    fontWeight: '600',
-    color: palette.text,
-  },
-  dayType: {
-    ...Typography.caption2,
-    color: palette.textSecondary,
-  },
-
-  // ── Workout History ──
-  workoutHistoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 0.5,
-    borderBottomColor: palette.separator,
-  },
-  workoutHistoryIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: palette.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: Spacing.sm,
-  },
-  workoutHistoryEmoji: {
-    fontSize: 20,
-  },
-  workoutHistoryInfo: {
-    flex: 1,
-  },
-  workoutHistoryTitle: {
-    ...Typography.body,
-    color: palette.text,
-  },
-  workoutHistoryMeta: {
-    ...Typography.caption1,
-    color: palette.textSecondary,
-    marginTop: 2,
-  },
-  sourceBadge: {
-    marginLeft: Spacing.sm,
-  },
-  sourceText: {
-    fontSize: 16,
-  },
-
-  // ── Sync Card ──
-  syncCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surfaceElevated,
-    borderRadius: BorderRadius.md,
-    padding: Spacing.md,
-    ...Shadows.sm,
-  },
-  syncIcon: {
-    fontSize: 24,
-    marginRight: Spacing.sm,
-  },
-  syncInfo: {
-    flex: 1,
-  },
-  syncTitle: {
-    ...Typography.subhead,
-    color: palette.text,
-    fontWeight: '600',
-  },
-  syncDetail: {
-    ...Typography.caption1,
-    color: palette.textSecondary,
-  },
-  syncDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.systemGreen,
-  },
-});
+    // ── Workout Card ──
+    workoutCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 16,
+      backgroundColor: cardBg,
+      padding: 16,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: borderColor,
+      marginBottom: 16,
+    },
+    workoutImageContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 8,
+      overflow: 'hidden',
+    },
+    workoutImage: {
+      width: '100%',
+      height: '100%',
+    },
+    workoutInfo: {
+      flex: 1,
+    },
+    workoutTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: textMain,
+    },
+    workoutMeta: {
+      fontSize: 12,
+      color: textMuted,
+      marginTop: 2,
+    },
+    tagsRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 8,
+    },
+    tag: {
+      backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    tagHighlight: {
+      backgroundColor: 'rgba(236, 91, 19, 0.1)',
+    },
+    tagText: {
+      fontSize: 10,
+      color: isDark ? '#cbd5e1' : '#475569',
+    },
+    tagTextHighlight: {
+      color: primary,
+    },
+    moreButton: {
+      backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
+      padding: 8,
+      borderRadius: 9999,
+    },
+  });
+};

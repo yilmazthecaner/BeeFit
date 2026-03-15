@@ -153,7 +153,7 @@ export default function LoginScreen() {
   );
 }
 
-type Palette = typeof Colors.light;
+type Palette = typeof Colors.light | typeof Colors.dark;
 
 const createStyles = (palette: Palette) => StyleSheet.create({
   container: { flex: 1, backgroundColor: palette.background },
