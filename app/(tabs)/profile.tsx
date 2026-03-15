@@ -171,34 +171,46 @@ export default function ProfileScreen() {
         {/* Connected Devices */}
         <Text style={styles.sectionHeader}>CONNECTED DEVICES</Text>
         <View style={styles.sectionBlock}>
-          <View style={styles.deviceRow}>
-            <View style={[styles.deviceIconBg, { backgroundColor: '#10b981' }]}>
-              <MaterialIcons name="watch" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.deviceInfo}>
-              <Text style={styles.deviceName}>Apple Watch Ultra</Text>
-              <Text style={styles.deviceStatus}>Connected • Battery 82%</Text>
-            </View>
-            <Switch
-              value={true}
-              onValueChange={() => handleComingSoon('Device Settings')}
-              trackColor={{ true: '#ec5b13' }}
-            />
-          </View>
-          <View style={[styles.deviceRow, { borderBottomWidth: 0 }]}>
-            <View style={[styles.deviceIconBg, { backgroundColor: '#3b82f6' }]}>
-              <MaterialIcons name="monitor-weight" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.deviceInfo}>
-              <Text style={styles.deviceName}>Smart Scale</Text>
-              <Text style={styles.deviceStatus}>Last sync: Today, 7:00 AM</Text>
-            </View>
-            <Switch
-              value={true}
-              onValueChange={() => handleComingSoon('Device Settings')}
-              trackColor={{ true: '#ec5b13' }}
-            />
-          </View>
+          {user?.hasSmartDevice ? (
+            <>
+              <View style={styles.deviceRow}>
+                <View style={[styles.deviceIconBg, { backgroundColor: '#10b981' }]}>
+                  <MaterialIcons name="watch" size={24} color="#ffffff" />
+                </View>
+                <View style={styles.deviceInfo}>
+                  <Text style={styles.deviceName}>Apple Watch Ultra</Text>
+                  <Text style={styles.deviceStatus}>Connected • Battery 82%</Text>
+                </View>
+                <Switch
+                  value={true}
+                  onValueChange={() => handleComingSoon('Device Settings')}
+                  trackColor={{ true: '#ec5b13' }}
+                />
+              </View>
+              <View style={[styles.deviceRow, { borderBottomWidth: 0 }]}>
+                <View style={[styles.deviceIconBg, { backgroundColor: '#3b82f6' }]}>
+                  <MaterialIcons name="monitor-weight" size={24} color="#ffffff" />
+                </View>
+                <View style={styles.deviceInfo}>
+                  <Text style={styles.deviceName}>Smart Scale</Text>
+                  <Text style={styles.deviceStatus}>Last sync: Today, 7:00 AM</Text>
+                </View>
+                <Switch
+                  value={true}
+                  onValueChange={() => handleComingSoon('Device Settings')}
+                  trackColor={{ true: '#ec5b13' }}
+                />
+              </View>
+            </>
+          ) : (
+            <TouchableOpacity 
+              style={[styles.infoRow, { justifyContent: 'center', borderBottomWidth: 0, paddingVertical: 20 }]}
+              onPress={() => handleComingSoon('Connect Device')}
+            >
+              <MaterialIcons name="add-circle-outline" size={24} color="#ec5b13" style={{ marginRight: 8 }} />
+              <Text style={[styles.infoLabel, { color: '#ec5b13', fontWeight: '600' }]}>Connect a Device</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Health Biometrics */}

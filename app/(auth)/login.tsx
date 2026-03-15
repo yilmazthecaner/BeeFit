@@ -18,6 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/constants/theme';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useColorScheme } from '../../components/useColorScheme';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
@@ -67,7 +68,6 @@ export default function LoginScreen() {
             <Text style={styles.tagline}>Your AI Health Coach</Text>
           </View>
 
-          {/* Form */}
           <View style={styles.form}>
             {isSignUp && (
               <View style={styles.inputContainer}>
@@ -130,6 +130,34 @@ export default function LoginScreen() {
                 </Text>
               )}
             </TouchableOpacity>
+
+            <View style={styles.dividerContainer}>
+              <View style={[styles.dividerLine, { backgroundColor: palette.border }]} />
+              <Text style={[styles.dividerText, { color: palette.textSecondary }]}>OR</Text>
+              <View style={[styles.dividerLine, { backgroundColor: palette.border }]} />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.oauthBtn, { backgroundColor: colorScheme === 'dark' ? '#ffffff' : '#000000' }]}
+              onPress={() => Alert.alert('Coming Soon', 'Apple Sign-in is not yet configured.')}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="apple" size={24} color={colorScheme === 'dark' ? '#000000' : '#ffffff'} />
+              <Text style={[styles.oauthBtnText, { color: colorScheme === 'dark' ? '#000000' : '#ffffff' }]}>
+                Continue with Apple
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.oauthBtn, { backgroundColor: palette.surface, borderColor: palette.border, borderWidth: 1 }]}
+              onPress={() => Alert.alert('Coming Soon', 'Google Sign-in is not yet configured.')}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="g-mobiledata" size={26} color={palette.text} />
+              <Text style={[styles.oauthBtnText, { color: palette.text }]}>
+                Continue with Google
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Toggle */}
@@ -189,4 +217,17 @@ const createStyles = (palette: Palette) => StyleSheet.create({
   toggleBtn: { alignItems: 'center', marginTop: Spacing.xl },
   toggleText: { ...Typography.subhead, color: palette.textSecondary },
   toggleHighlight: { color: Colors.primary, fontWeight: '600' },
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.xl },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { marginHorizontal: Spacing.sm, ...Typography.subhead, fontWeight: '600' },
+  oauthBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+    gap: Spacing.sm,
+  },
+  oauthBtnText: { ...Typography.callout, fontWeight: '600' },
 });
