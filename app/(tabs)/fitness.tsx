@@ -30,10 +30,7 @@ import { useFitnessStore } from '../../src/stores/useFitnessStore';
 // MOCK DATA
 // ════════════════════════════════════════
 
-const watchStats = {
-  heartRate: { value: 72, unit: 'BPM', change: '+5%', label: 'Heart Rate' },
-  calories: { value: 450, unit: 'kcal', change: '-2%', label: 'Active Calories' },
-};
+// Remove mock watchStats
 
 const todayDate = new Date().toLocaleDateString('en-US', {
   weekday: 'long',
@@ -55,7 +52,7 @@ export default function FitnessScreen() {
   const router = useRouter();
 
   const { user } = useAuthStore();
-  const { todaysWorkouts, fetchTodaysWorkouts, activePlan, fetchActivePlan, generateWorkout, isLoading } = useFitnessStore();
+  const { healthData, todaysWorkouts, fetchTodaysWorkouts, activePlan, fetchActivePlan, generateWorkout, isLoading } = useFitnessStore();
 
   useEffect(() => {
     if (user?.id) {
@@ -128,26 +125,26 @@ export default function FitnessScreen() {
             <View style={styles.statCard}>
               <View style={styles.statCardHeader}>
                 <MaterialIcons name="favorite" size={22} color="#ef4444" />
-                <Text style={styles.changePositive}>{watchStats.heartRate.change}</Text>
+                <Text style={styles.changePositive}>Live</Text>
               </View>
               <Text style={styles.statValue}>
-                {watchStats.heartRate.value}{' '}
-                <Text style={styles.statUnit}>{watchStats.heartRate.unit}</Text>
+                {healthData.exerciseMinutes}{' '}
+                <Text style={styles.statUnit}>Min</Text>
               </Text>
-              <Text style={styles.statLabel}>{watchStats.heartRate.label}</Text>
+              <Text style={styles.statLabel}>Exercise Time</Text>
             </View>
 
             {/* Calories */}
             <View style={styles.statCard}>
               <View style={styles.statCardHeader}>
                 <MaterialIcons name="local-fire-department" size={22} color="#ec5b13" />
-                <Text style={styles.changePrimary}>{watchStats.calories.change}</Text>
+                <Text style={styles.changePrimary}>Live</Text>
               </View>
               <Text style={styles.statValue}>
-                {watchStats.calories.value}{' '}
-                <Text style={styles.statUnit}>{watchStats.calories.unit}</Text>
+                {healthData.activeCalories}{' '}
+                <Text style={styles.statUnit}>kcal</Text>
               </Text>
-              <Text style={styles.statLabel}>{watchStats.calories.label}</Text>
+              <Text style={styles.statLabel}>Active Calories</Text>
             </View>
           </View>
         </View>

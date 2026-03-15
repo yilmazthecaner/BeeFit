@@ -210,7 +210,7 @@ export default function ProfileScreen() {
               <Text style={styles.infoLabel}>Height</Text>
             </View>
             <View style={styles.infoRowRight}>
-              <Text style={styles.infoValue}>178 cm</Text>
+              <Text style={styles.infoValue}>{user?.heightCm ? `${user.heightCm} cm` : 'Not set'}</Text>
               <MaterialIcons name="chevron-right" size={20} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
           </TouchableOpacity>
@@ -220,7 +220,7 @@ export default function ProfileScreen() {
               <Text style={styles.infoLabel}>Weight</Text>
             </View>
             <View style={styles.infoRowRight}>
-              <Text style={styles.infoValue}>75.5 kg</Text>
+              <Text style={styles.infoValue}>{user?.weightKg ? `${user.weightKg} kg` : 'Not set'}</Text>
               <MaterialIcons name="chevron-right" size={20} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
           </TouchableOpacity>
@@ -230,7 +230,7 @@ export default function ProfileScreen() {
               <Text style={styles.infoLabel}>Fitness Goal</Text>
             </View>
             <View style={styles.infoRowRight}>
-              <Text style={styles.infoValue}>Muscle Gain</Text>
+              <Text style={styles.infoValue}>{user?.fitnessGoal ? user.fitnessGoal.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Not set'}</Text>
               <MaterialIcons name="chevron-right" size={20} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
           </TouchableOpacity>

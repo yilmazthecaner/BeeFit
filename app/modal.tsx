@@ -15,18 +15,27 @@ export default function EditProfileModal() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const { user } = useAuthStore();
+  const { user, updateProfile } = useAuthStore();
   const u = user as any;
   
-  // Just local state for UI effect for now
-  const [name, setName] = useState(u?.user_metadata?.first_name || 'Alex');
-  const [weight, setWeight] = useState('75.5');
-  const [height, setHeight] = useState('178');
-  const [goal, setGoal] = useState('Muscle Gain');
+  const [name, setName] = useState(u?.displayName || u?.user_metadata?.first_name || 'Alex');
+  const [weight, setWeight] = useState(user?.weightKg?.toString() || '75.5');
+  const [height, setHeight] = useState(user?.heightCm?.toString() || '178');
+  const [goal, setGoal] = useState<string>(user?.fitnessGoal || 'lose_weight');
+  const [isSaving, setIsSaving] = useState(false);
   
-  const handleSave = () => {
-    // In a real app, this would call supabase.auth.updateUser or update a profiles table
-    // For now, it satisfies the UI functionality request.
+  const handleSave = async () => {
+    setIsSaving(true);
+    if (isGoal) {
+      await updateProfile({ fitnessGoal: goal as any });
+    } else {
+      await updateProfile({
+        displayName: name,
+        heightCm: parseInt(height, 10),
+        weightKg: parseFloat(weight),
+      });
+    }
+    setIsSaving(false);
     router.back();
   };
 
@@ -85,8 +94,8 @@ export default function EditProfileModal() {
         </>
       )}
 
-      <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-        <Text style={styles.saveBtnText}>Save Changes</Text>
+      <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={isSaving}>
+        <Text style={styles.saveBtnText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
       </TouchableOpacity>
 
       <StatusBar style={Platform.OS === 'ios' ? 'light' : 'auto'} />

@@ -85,8 +85,12 @@ serve(async (req: Request) => {
     );
   } catch (error) {
     console.error('[search-context] Error:', error);
+    const errorMsg = error.message || 'Unknown error';
+    const isClientError = errorMsg.includes('required') || errorMsg.includes('not found') || errorMsg.includes('quota');
+    const safeErrorMsg = isClientError ? errorMsg : 'An internal server error occurred while processing your request. Please try again later.';
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: safeErrorMsg }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

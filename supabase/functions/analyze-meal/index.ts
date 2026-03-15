@@ -161,8 +161,12 @@ serve(async (req: Request) => {
     );
   } catch (error: any) {
     console.error('[analyze-meal] Critical Error:', error.message);
+    const errorMsg = error.message || 'Unknown error';
+    const isClientError = errorMsg.includes('required') || errorMsg.includes('not found') || errorMsg.includes('quota') || errorMsg.includes('limit');
+    const safeErrorMsg = isClientError ? errorMsg : 'An internal server error occurred while processing your request. Please try again later.';
+
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: safeErrorMsg }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -24,6 +24,7 @@ interface AuthState {
   signUpWithEmail: (email: string, password: string, displayName: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   completeOnboarding: (data: OnboardingData) => Promise<boolean>;
+  updateProfile: (data: Partial<OnboardingData> & { displayName?: string }) => Promise<boolean>;
   clearError: () => void;
 }
 
@@ -221,6 +222,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({
         user: mapProfileRow(data),
         isOnboarded: true,
+        isLoading: false,
+      });
+
+      return true;
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false });
+      return false;
+    }
+  },
+
+  updateProfile: async (profileData) => {
+    const { session } = get();
+    if (!session) return false;
+
+    set({ isLoading: true, error: null });
+    try {
+      const payload: any = { updated_at: new Date().toISOString() };
+      
+      if (profileData.displayName !== undefined) payload.display_name = profileData.displayName;
+      if (profileData.heightCm !== undefined) payload.height_cm = profileData.heightCm;
+      if (profileData.weightKg !== undefined) payload.weight_kg = profileData.weightKg;
+      if (profileData.fitnessGoal !== undefined) payload.fitness_goal = profileData.fitnessGoal;
+      
+      // We don't recalculate macros here unless it's a full goal change, 
+      // but for simplicity we'll just update the exact fields passed.
+
+      const { data, error } = await supabase
+        .from('users')
+        .update(payload)
+        .eq('id', session.user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set({
+        user: mapProfileRow(data),
         isLoading: false,
       });
 

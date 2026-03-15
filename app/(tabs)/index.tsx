@@ -12,7 +12,7 @@ import { useColorScheme } from '../../components/useColorScheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useNutritionStore } from '../../src/stores/useNutritionStore';
-import { useFitnessStore } from '../../src/stores/useFitnessStore';
+import useFitnessStore from '../../src/stores/useFitnessStore';
 
 export default function DashboardScreen() {
   const colorScheme = useColorScheme();
@@ -48,6 +48,13 @@ export default function DashboardScreen() {
     initializeHealthKit();
   }, []);
 
+  const getAvatarFallback = () => {
+    return userName.charAt(0).toUpperCase();
+  };
+
+  const proteinDeficit = (user?.dailyProteinG || 160) - dailyTotals.protein;
+  const isProteinLow = proteinDeficit > 20;
+
   // Header matching Stitch exactly
   const renderHeader = () => (
     <View style={styles.header}>
@@ -55,10 +62,16 @@ export default function DashboardScreen() {
         style={styles.profileImageContainer}
         onPress={() => router.push('/(tabs)/profile')}
       >
-        <Image 
-          source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZ3R4qJ6JDGoygMvbQ0Ywr46v22ed51uYIUXUGa1bfZn5sy6Y9ogNcZpaLqUETxcNkxTHOJjWAMrFE_9Xs83o7yQ6R2xOjOEV2jd8N68MvKq_cDf6pSjGD0ZBg541flkDSvGGO919WH93epEiIrrbHttc51YmRY-b_EZDHBQx11YNllzK0efPHfPYLN6gVFYkn6-L-X5rdq9ndTbmnoCsXnGcRYLWOYtlIDqGA52BPqKYNTQA9D0GsvuRtRxGw9hsJUJflA5i_anhq' }}
-          style={styles.profileImage}
-        />
+        {user?.avatarUrl ? (
+          <Image 
+            source={{ uri: user.avatarUrl }}
+            style={styles.profileImage}
+          />
+        ) : (
+          <View style={styles.profileFallback}>
+            <Text style={styles.profileFallbackText}>{getAvatarFallback()}</Text>
+          </View>
+        )}
       </TouchableOpacity>
       <View style={styles.headerCenter}>
         <Text style={styles.headerSubtitle}>TODAY</Text>
@@ -94,14 +107,14 @@ export default function DashboardScreen() {
         <View style={styles.greetingSection}>
           <Text style={styles.greetingTitle}>{getGreeting()}, {userName}.</Text>
           <Text style={styles.greetingText}>
-            "You've recovered exceptionally well. Your heart rate variability is up 15%, suggesting today is perfect for a high-intensity session."
+            "Ready to conquer the day? Keep an eye on your activity rings and log your meals to stay on track."
           </Text>
         </View>
 
         <View style={styles.activityGrid}>
           <NestedActivityRings 
             moveVal={Math.max(healthData.activeCalories, dailyTotals.calories)} 
-            moveTarget={600} 
+            moveTarget={user?.dailyCalorieTarget || 2200} 
             exerciseVal={Math.max(healthData.exerciseMinutes, 15)} 
             exerciseTarget={30} 
             standVal={8} 
@@ -111,16 +124,16 @@ export default function DashboardScreen() {
           />
         </View>
 
-        <View style={styles.insightsSection}>
-          <View style={styles.insightsHeader}>
-            <Text style={styles.insightsTitle}>Proactive Insights</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/fitness')}>
-              <Text style={styles.insightsLink}>View History</Text>
-            </TouchableOpacity>
-          </View>
+        {(isProteinLow && showInsight) && (
+          <View style={styles.insightsSection}>
+            <View style={styles.insightsHeader}>
+              <Text style={styles.insightsTitle}>Proactive Insights</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/fitness')}>
+                <Text style={styles.insightsLink}>View History</Text>
+              </TouchableOpacity>
+            </View>
 
-          {/* Insight Card 1 */}
-          {showInsight && (
+            {/* Insight Card 1 */}
             <View style={styles.insightCard1}>
               <View style={styles.insightIcon1Container}>
                 <MaterialIcons name="restaurant" size={24} color="#ffffff" />
@@ -133,7 +146,7 @@ export default function DashboardScreen() {
                   </View>
                 </View>
                 <Text style={styles.insightBody1}>
-                  You're currently 45g short of your daily target. Consuming protein in your next meal will help maintain the muscle recovery from yesterday's heavy session.
+                  You're currently {Math.round(proteinDeficit)}g short of your daily target. Consuming protein in your next meal will help maintain muscle recovery.
                 </Text>
                 <View style={styles.insightActions}>
                   <TouchableOpacity 
@@ -151,21 +164,8 @@ export default function DashboardScreen() {
                 </View>
               </View>
             </View>
-          )}
-
-          {/* Insight Card 2 */}
-          <View style={styles.insightCard2}>
-            <View style={styles.insightIcon2Container}>
-              <MaterialIcons name="bedtime" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.insightContent}>
-              <Text style={styles.insightTitle2}>Optimizing Wind-down</Text>
-              <Text style={styles.insightBody2}>
-                Based on your high activity, start your wind-down at 9:15 PM tonight to hit your 8-hour sleep goal.
-              </Text>
-            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -283,6 +283,18 @@ const createStyles = (isDark: boolean) => {
     headerRight: {
       width: 40,
       alignItems: 'flex-end',
+    },
+    profileFallback: {
+      width: '100%',
+      height: '100%',
+      backgroundColor: '#ec5b13',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    profileFallbackText: {
+      color: '#fff',
+      fontSize: 18,
+      fontWeight: 'bold',
     },
     settingsButton: {
       width: 40,
