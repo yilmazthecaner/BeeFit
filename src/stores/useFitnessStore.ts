@@ -5,32 +5,120 @@
 import { create } from 'zustand';
 import type { WorkoutLog, WorkoutPlan } from '../types/workout';
 import supabase from '../services/supabase/client';
+import AppleHealthKit, { HealthValue, HealthInputOptions } from 'react-native-health';
+import { Platform } from 'react-native';
 
 interface FitnessState {
   // ── State ──
   todaysWorkouts: WorkoutLog[];
   weeklyWorkouts: WorkoutLog[];
   activePlan: WorkoutPlan | null;
+  healthData: {
+    steps: number;
+    activeCalories: number;
+    exerciseMinutes: number;
+  };
   isLoading: boolean;
   isSyncing: boolean;
   lastSyncAt: string | null;
 
   // ── Actions ──
+  initializeHealthKit: () => Promise<void>;
+  fetchHealthKitData: () => Promise<void>;
   fetchTodaysWorkouts: (userId: string) => Promise<void>;
   fetchWeeklyWorkouts: (userId: string) => Promise<void>;
   fetchActivePlan: (userId: string) => Promise<void>;
   addWorkoutLog: (workout: Omit<WorkoutLog, 'id' | 'createdAt'>) => Promise<void>;
+  generateWorkout: (userId: string, planType?: 'daily'|'weekly'|'monthly', equipment?: string[]) => Promise<void>;
   setSyncing: (syncing: boolean) => void;
   setLastSync: (date: string) => void;
 }
 
-export const useFitnessStore = create<FitnessState>((set) => ({
+export const useFitnessStore = create<FitnessState>((set, get) => ({
   todaysWorkouts: [],
   weeklyWorkouts: [],
   activePlan: null,
+  healthData: {
+    steps: 0,
+    activeCalories: 0,
+    exerciseMinutes: 0,
+  },
   isLoading: false,
   isSyncing: false,
   lastSyncAt: null,
+
+  initializeHealthKit: async () => {
+    if (Platform.OS !== 'ios') return;
+    return new Promise((resolve) => {
+      const permissions = {
+        permissions: {
+          read: [
+            AppleHealthKit.Constants.Permissions.StepCount,
+            AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
+            AppleHealthKit.Constants.Permissions.AppleExerciseTime,
+          ],
+          write: [],
+        },
+      } as any;
+
+      AppleHealthKit.initHealthKit(permissions, (error: string) => {
+        if (error) {
+          console.log('[ERROR] Cannot grant permissions to Apple HealthKit', error);
+          resolve(); // resolve anyway so app continues
+          return;
+        }
+        console.log('[DEBUG] HealthKit permissions granted');
+        get().fetchHealthKitData().then(resolve);
+      });
+    });
+  },
+
+  fetchHealthKitData: async () => {
+    if (Platform.OS !== 'ios') return;
+    const options: HealthInputOptions = {
+      date: new Date().toISOString(),
+      includeManuallyAdded: true,
+    };
+
+    let steps = 0;
+    let activeCalories = 0;
+    let exerciseMinutes = 0;
+
+    await new Promise<void>((resolve) => {
+      AppleHealthKit.getStepCount(options, (err: string, results: HealthValue) => {
+        if (!err && results) steps = results.value;
+        resolve();
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      AppleHealthKit.getActiveEnergyBurned(options, (err: string, results: HealthValue[]) => {
+        if (!err && results && results.length > 0) {
+          // getActiveEnergyBurned can return an array or single val depending on how called, summarize if array
+          activeCalories = results.reduce((sum, item) => sum + item.value, 0);
+        }
+        resolve();
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      AppleHealthKit.getAppleExerciseTime(options, (err: string, results: HealthValue[]) => {
+        if (!err && results && results.length > 0) {
+          exerciseMinutes = results.reduce((sum, item) => sum + item.value, 0);
+        }
+        resolve();
+      });
+    });
+
+    set((state) => ({
+      healthData: {
+        ...state.healthData,
+        steps: Math.round(steps),
+        activeCalories: Math.round(activeCalories),
+        exerciseMinutes: Math.round(exerciseMinutes),
+      }
+    }));
+  },
 
   fetchTodaysWorkouts: async (userId) => {
     set({ isLoading: true });
@@ -120,6 +208,29 @@ export const useFitnessStore = create<FitnessState>((set) => ({
       set((state) => ({
         todaysWorkouts: [mapWorkoutRow(data), ...state.todaysWorkouts],
       }));
+    }
+  },
+
+  generateWorkout: async (userId, planType = 'daily', equipment = []) => {
+    set({ isLoading: true });
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-workout', {
+        body: { userId, planType, equipment },
+      });
+
+      if (error) throw error;
+      
+      // Attempt to refresh the newly active plan
+      await useFitnessStore.getState().fetchActivePlan(userId);
+    } catch (error: any) {
+      console.error('generateWorkout error:', error.message);
+      if (error.message?.includes('non-2xx status code')) {
+         alert('Bee Coach AI quota exceeded. Please top up API billing to generate workouts.');
+      } else {
+         alert('Failed to generate workout. Please try again later.');
+      }
+    } finally {
+      set({ isLoading: false });
     }
   },
 

@@ -89,7 +89,7 @@ export default function CoachChatScreen() {
             <MaterialIcons name="psychology" size={24} color="#ffffff" />
           </View>
           <View>
-            <Text style={styles.headerTitle}>The Brain</Text>
+            <Text style={styles.headerTitle}>Bee Coach</Text>
             <View style={styles.statusRow}>
               <View style={styles.onlineDot} />
               <Text style={styles.statusText}>PERSONAL COACH</Text>

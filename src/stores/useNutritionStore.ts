@@ -14,7 +14,7 @@ interface NutritionState {
   isAnalyzing: boolean;  // true while Vision API is processing
 
   // ── Actions ──
-  fetchTodaysMeals: (userId: string) => Promise<void>;
+  fetchTodaysMeals: (userId: string, targetDate?: Date) => Promise<void>;
   addMealLog: (meal: MealLog) => void;
   setAnalyzing: (analyzing: boolean) => void;
   getDailyTotals: () => { calories: number; protein: number; carbs: number; fat: number };
@@ -26,16 +26,20 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
   isLoading: false,
   isAnalyzing: false,
 
-  fetchTodaysMeals: async (userId) => {
+  fetchTodaysMeals: async (userId, targetDate) => {
     set({ isLoading: true });
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const start = targetDate ? new Date(targetDate) : new Date();
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(start);
+    end.setHours(23, 59, 59, 999);
 
     const { data } = await supabase
       .from('meal_logs')
       .select('*, meal_items(*)')
       .eq('user_id', userId)
-      .gte('logged_at', todayStart.toISOString())
+      .gte('logged_at', start.toISOString())
+      .lte('logged_at', end.toISOString())
       .order('logged_at', { ascending: true });
 
     const meals: MealLog[] = (data ?? []).map((row) => ({

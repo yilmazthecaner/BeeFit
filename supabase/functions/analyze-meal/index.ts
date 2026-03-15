@@ -18,7 +18,6 @@ const corsHeaders = {
 };
 
 serve(async (req: Request) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -34,64 +33,134 @@ serve(async (req: Request) => {
     }
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      throw new Error('OPENAI_API_KEY not configured');
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+
+    // DeepSeek API doesn't fully support structured JSON vision yet. 
+    // Load balance between OpenAI and Gemini for images.
+    const availableProviders = [];
+    if (openaiApiKey) availableProviders.push('openai');
+    if (geminiApiKey) availableProviders.push('gemini');
+
+    if (availableProviders.length === 0) {
+      throw new Error('No AI provider API keys configured for Vision (OpenAI or Gemini required).');
     }
 
-    // Call GPT-4o Vision
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model ?? 'gpt-4o',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: photoUrl,
-                  detail: 'high',
+    const shuffledProviders = availableProviders.sort(() => Math.random() - 0.5);
+    
+    let lastError = null;
+    let analysis = null;
+    let successfulProvider = null;
+
+    for (const provider of shuffledProviders) {
+      try {
+        console.log(`[analyze-meal] Attempting vision analysis with provider: ${provider}`);
+
+        if (provider === 'openai') {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openaiApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: model ?? 'gpt-4o',
+              messages: [
+                {
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: prompt },
+                    { type: 'image_url', image_url: { url: photoUrl, detail: 'high' } },
+                  ],
                 },
-              },
-            ],
-          },
-        ],
-        max_tokens: 1000,
-        temperature: 0.3, // Lower temperature for more consistent nutritional estimates
-        response_format: { type: 'json_object' },
-      }),
-    });
+              ],
+              max_tokens: 1000,
+              temperature: 0.3,
+              response_format: { type: 'json_object' },
+            }),
+          });
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`);
+          if (!response.ok) throw new Error(`OpenAI Vision error: ${response.status} ${await response.text()}`);
+          
+          const result = await response.json();
+          const content = result.choices?.[0]?.message?.content;
+          
+          if (content) {
+             analysis = JSON.parse(content);
+          }
+        } 
+        
+        else if (provider === 'gemini') {
+           // Gemini requires the image to be base64 or sent as part of the inlineData if it's a remote URL.
+           // However, for remote URLs, the easiest way is to download it quickly and convert it to base64 for Gemini.
+           const imageRes = await fetch(photoUrl);
+           const imageBuffer = await imageRes.arrayBuffer();
+           const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+           const mimeType = imageRes.headers.get('content-type') || 'image/jpeg';
+
+           // IMPORTANT: Instruct Gemini explicitly to return valid JSON
+           const promptWithFormatting = `${prompt}\n\nPlease respond ONLY with a raw JSON object and absolutely no markdown formatting or backticks.`;
+
+           const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: promptWithFormatting },
+                  {
+                    inlineData: {
+                      mimeType: mimeType,
+                      data: base64Image
+                    }
+                  }
+                ]
+              }],
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 1000,
+                responseMimeType: "application/json"
+              }
+            }),
+          });
+
+          if (!response.ok) throw new Error(`Gemini Vision error: ${response.status} ${await response.text()}`);
+          
+          const result = await response.json();
+          const content = result.candidates?.[0]?.content?.parts?.[0]?.text;
+          
+          if (content) {
+             // Gemini might return markdown fenced JSON depending on prompting/api version. Attempt to clean it.
+             const cleanedStr = content.replace(/```json\n|```/g, '').trim();
+             analysis = JSON.parse(cleanedStr);
+          }
+        }
+
+        if (analysis) {
+          successfulProvider = provider;
+          break; // Success! Break out of fallback loop.
+        }
+
+      } catch (err: any) {
+         console.warn(`[analyze-meal] Provider ${provider} failed:`, err.message);
+         lastError = err;
+      }
     }
 
-    const result = await response.json();
-    const content = result.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content in OpenAI response');
+    if (!analysis) {
+      throw new Error(`All available Vision AI providers failed. Last error: ${lastError?.message}`);
     }
-
-    // Parse the JSON response from the Vision model
-    const analysis = JSON.parse(content);
 
     return new Response(
-      JSON.stringify({ analysis }),
+      JSON.stringify({ analysis, provider: successfulProvider }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
-    console.error('[analyze-meal] Error:', error);
+  } catch (error: any) {
+    console.error('[analyze-meal] Critical Error:', error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

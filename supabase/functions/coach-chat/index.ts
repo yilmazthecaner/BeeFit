@@ -33,41 +33,119 @@ serve(async (req: Request) => {
     }
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      throw new Error('OPENAI_API_KEY not configured');
+    const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
+    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+
+    // Filter available providers based on configured API keys
+    const availableProviders = [];
+    if (openaiApiKey) availableProviders.push('openai');
+    if (deepseekApiKey) availableProviders.push('deepseek');
+    if (geminiApiKey) availableProviders.push('gemini');
+
+    if (availableProviders.length === 0) {
+      throw new Error('No AI provider API keys are configured (OpenAI, DeepSeek, Gemini).');
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model ?? 'gpt-4o',
-        messages,
-        max_tokens: 800,
-        temperature: 0.7,
-      }),
-    });
+    // Shuffle providers to achieve load balancing
+    const shuffledProviders = availableProviders.sort(() => Math.random() - 0.5);
+    
+    // Variables for fallback tracking
+    let lastError = null;
+    let reply = null;
+    let successfulProvider = null;
 
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`);
+    for (const provider of shuffledProviders) {
+      try {
+        console.log(`[coach-chat] Attempting chat completion with provider: ${provider}`);
+        
+        if (provider === 'openai') {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openaiApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: model ?? 'gpt-4o',
+              messages,
+              max_tokens: 800,
+              temperature: 0.7,
+            }),
+          });
+          if (!response.ok) throw new Error(`OpenAI error: ${response.status} ${await response.text()}`);
+          const result = await response.json();
+          reply = result.choices?.[0]?.message?.content;
+        } 
+        
+        else if (provider === 'deepseek') {
+          const response = await fetch('https://api.deepseek.com/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${deepseekApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'deepseek-chat',
+              messages,
+              max_tokens: 800,
+              temperature: 0.7,
+            }),
+          });
+          if (!response.ok) throw new Error(`DeepSeek error: ${response.status} ${await response.text()}`);
+          const result = await response.json();
+          reply = result.choices?.[0]?.message?.content;
+        }
+
+        else if (provider === 'gemini') {
+          // Flatten messages for Gemini API
+          const geminiMessages = messages.map((m: any) => ({
+             role: m.role === 'assistant' ? 'model' : m.role,
+             parts: [{ text: m.content }]
+          }));
+
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: geminiMessages,
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 800,
+              }
+            }),
+          });
+
+          if (!response.ok) throw new Error(`Gemini error: ${response.status} ${await response.text()}`);
+          const result = await response.json();
+          reply = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        }
+
+        if (reply) {
+          successfulProvider = provider;
+          break; // Success! Break out of the fallback loop.
+        }
+      } catch (err: any) {
+        console.warn(`[coach-chat] Provider ${provider} failed:`, err.message);
+        lastError = err;
+        // Continue to the next provider
+      }
     }
 
-    const result = await response.json();
-    const reply = result.choices?.[0]?.message?.content ?? '';
+    if (!reply) {
+      throw new Error(`All available AI providers failed. Last error: ${lastError?.message}`);
+    }
 
     return new Response(
-      JSON.stringify({ reply }),
+      JSON.stringify({ reply, provider: successfulProvider }),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
-    console.error('[coach-chat] Error:', error);
+  } catch (error: any) {
+    console.error('[coach-chat] Critical Error:', error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

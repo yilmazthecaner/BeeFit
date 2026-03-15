@@ -43,9 +43,18 @@ export default function NutritionScreen() {
     fat: { consumed: dailyTotals.fat, target: user?.dailyFatG ?? 75 },
   };
 
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
   useEffect(() => {
-    if (user?.id) fetchTodaysMeals(user.id);
-  }, [user?.id]);
+    if (user?.id) fetchTodaysMeals(user.id, selectedDate);
+  }, [user?.id, selectedDate]);
+
+  const handlePrevDay = () => setSelectedDate(d => { const nd = new Date(d); nd.setDate(nd.getDate() - 1); return nd; });
+  const handleNextDay = () => setSelectedDate(d => { const nd = new Date(d); nd.setDate(nd.getDate() + 1); return nd; });
+
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
+  const navTitleText = isToday ? 'Today' : selectedDate.toLocaleDateString('en-US', { weekday: 'long' });
+  const navSubtitleText = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const handleLogMeal = async () => {
     Alert.alert('Log a Meal', 'Add a photo or search for food', [
@@ -78,7 +87,7 @@ export default function NutritionScreen() {
         // Here we default to 'lunch' for the demo if type is needed
         const analyzer = new VisionAnalyzer(user.id);
         await analyzer.analyzeAndLogMeal(imageUri, 'lunch');
-        await fetchTodaysMeals(user.id);
+        await fetchTodaysMeals(user.id, selectedDate);
         Alert.alert('Meal Logged! 🐝', 'AI analyzed and logged your meal successfully.');
       }
     } catch (error) {
@@ -100,40 +109,19 @@ export default function NutritionScreen() {
         photoUrl: m.photoUrl,
         feedback: m.aiFeedback,
       }))
-    : [
-        {
-          id: '1',
-          type: 'Breakfast',
-          time: '8:30 AM',
-          items: 'Avocado Toast & Eggs',
-          calories: 450,
-          protein: 22,
-          photoUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDB88a47Jpcimg28cy3e7XnZnKQMl0fa_vRd1MOx0ufcd4vw3FMaWOfThZovxZfUZ5rhmvYquoBCtamqEqCTpEvSYgnhgJVuC4IFBNrz34Zz8qmjOFv9ikOiDWEUU-zmCLDOuz8Q7tM0zD3JObv1YZOso_qUlbDqMQF_0l18jFJjnyWDZuJBd32P5XlE7atF9hue-HCvPqEUFnit44Ele_NzPTva78Ih9S9TZwfuBU6sEgO8HKgCNAtyMD0G7Hxlfcy645MbENYF0Zi',
-          feedback: "Great start! Excellent source of healthy fats and protein.",
-        },
-        {
-          id: '2',
-          type: 'Lunch',
-          time: '1:15 PM',
-          items: 'Grilled Salmon Bowl',
-          calories: 620,
-          protein: 45,
-          photoUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBeJ1F6OC1OjiojCiYc-wlyLT6VrEcz6lbOTSFEYslRRMG85giNYppbsSIYvpUNyrAED5QO_gkjg-gO-oqvoltz9GVAfGTYop9DOZlcGdOVJgrJ_EbhNvttf1duJ4Ypt5VYcGpkhpMnFPUC3gPUIcLUSyTZirOVvb2HM8eZT5i2sGtQSRwadlXwnKjyIOGdZUtJIWZgWxo72vYucfSyVhWJG2OhyPSyGpO0JuFSBhUv1dS87sGfzobY2I8CJUlK9ORCnZBozEv6BSM',
-          feedback: "Perfect post-workout recovery meal. High in Omega-3.",
-        },
-      ];
+    : []; // Show empty timeline when there are no meals for selected day!
 
   const renderHeader = () => (
     <View style={styles.topNav}>
-      <TouchableOpacity style={styles.navButton}>
+      <TouchableOpacity style={styles.navButton} onPress={handlePrevDay}>
         <MaterialIcons name="chevron-left" size={28} color={isDark ? '#cbd5e1' : '#334155'} />
       </TouchableOpacity>
       <View style={styles.navTitleContainer}>
-        <Text style={styles.navTitle}>Today</Text>
-        <Text style={styles.navSubtitle}>Nov 12</Text>
+        <Text style={styles.navTitle}>{navTitleText}</Text>
+        <Text style={styles.navSubtitle}>{navSubtitleText}</Text>
       </View>
-      <TouchableOpacity style={styles.navButton}>
-        <MaterialIcons name="chevron-right" size={28} color={isDark ? '#cbd5e1' : '#334155'} />
+      <TouchableOpacity style={styles.navButton} onPress={handleNextDay} disabled={isToday}>
+        <MaterialIcons name="chevron-right" size={28} color={isToday ? (isDark ? '#334155' : '#e2e8f0') : (isDark ? '#cbd5e1' : '#334155')} />
       </TouchableOpacity>
     </View>
   );

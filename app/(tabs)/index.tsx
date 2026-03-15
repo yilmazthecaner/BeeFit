@@ -12,6 +12,7 @@ import { useColorScheme } from '../../components/useColorScheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useNutritionStore } from '../../src/stores/useNutritionStore';
+import { useFitnessStore } from '../../src/stores/useFitnessStore';
 
 export default function DashboardScreen() {
   const colorScheme = useColorScheme();
@@ -20,19 +21,45 @@ export default function DashboardScreen() {
   const router = useRouter();
 
   const { user } = useAuthStore();
-  const userName = user?.email ? user.email.split('@')[0] : 'Alex';
+  
+  const getFirstName = () => {
+    const u = user as any;
+    if (u?.user_metadata?.first_name) return u.user_metadata.first_name;
+    if (u?.user_metadata?.full_name) return u.user_metadata.full_name.split(' ')[0];
+    if (user?.displayName) return user.displayName.split(' ')[0];
+    if (user?.email) return user.email.split('@')[0];
+    return 'Alex';
+  };
+  const userName = getFirstName();
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  };
+
   const { getDailyTotals } = useNutritionStore();
   const dailyTotals = getDailyTotals();
+
+  const { healthData, initializeHealthKit } = useFitnessStore();
+
+  React.useEffect(() => {
+    initializeHealthKit();
+  }, []);
 
   // Header matching Stitch exactly
   const renderHeader = () => (
     <View style={styles.header}>
-      <View style={styles.profileImageContainer}>
+      <TouchableOpacity 
+        style={styles.profileImageContainer}
+        onPress={() => router.push('/(tabs)/profile')}
+      >
         <Image 
           source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZ3R4qJ6JDGoygMvbQ0Ywr46v22ed51uYIUXUGa1bfZn5sy6Y9ogNcZpaLqUETxcNkxTHOJjWAMrFE_9Xs83o7yQ6R2xOjOEV2jd8N68MvKq_cDf6pSjGD0ZBg541flkDSvGGO919WH93epEiIrrbHttc51YmRY-b_EZDHBQx11YNllzK0efPHfPYLN6gVFYkn6-L-X5rdq9ndTbmnoCsXnGcRYLWOYtlIDqGA52BPqKYNTQA9D0GsvuRtRxGw9hsJUJflA5i_anhq' }}
           style={styles.profileImage}
         />
-      </View>
+      </TouchableOpacity>
       <View style={styles.headerCenter}>
         <Text style={styles.headerSubtitle}>TODAY</Text>
         <TouchableOpacity 
@@ -40,16 +67,21 @@ export default function DashboardScreen() {
           onPress={() => (router.push as any)('/coach-chat')}
         >
           <MaterialIcons name="auto-awesome" size={14} color="#ec5b13" />
-          <Text style={styles.headerTitleText}>The Brain</Text>
+          <Text style={styles.headerTitleText}>Bee Coach</Text>
         </TouchableOpacity>
       </View>
       <View style={styles.headerRight}>
-        <TouchableOpacity style={styles.settingsButton}>
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => router.push('/(tabs)/profile')}
+        >
           <MaterialIcons name="settings" size={24} color="#ec5b13" />
         </TouchableOpacity>
       </View>
     </View>
   );
+
+  const [showInsight, setShowInsight] = React.useState(true);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -60,81 +92,66 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.greetingSection}>
-          <Text style={styles.greetingTitle}>Good morning, {userName}.</Text>
+          <Text style={styles.greetingTitle}>{getGreeting()}, {userName}.</Text>
           <Text style={styles.greetingText}>
             "You've recovered exceptionally well. Your heart rate variability is up 15%, suggesting today is perfect for a high-intensity session."
           </Text>
         </View>
 
         <View style={styles.activityGrid}>
-          {/* Move Card */}
-          <ActivityCard 
-            label="Move" 
-            value={Math.max(450, dailyTotals.calories)} 
-            target={600}
-            unit="kcal" 
-            color="#ec5b13" 
-            icon="local-fire-department" 
-            isDark={isDark}
-            styles={styles}
-          />
-          {/* Exercise Card */}
-          <ActivityCard 
-            label="Exercise" 
-            value={22} 
-            target={30} 
-            unit="min" 
-            color="#10b981" 
-            icon="fitness-center" 
-            isDark={isDark}
-            styles={styles}
-          />
-          {/* Stand Card */}
-          <ActivityCard 
-            label="Stand" 
-            value={8} 
-            target={12} 
-            unit="hr" 
-            color="#0ea5e9" 
-            icon="accessibility-new" 
-            isDark={isDark}
-            styles={styles}
+          <NestedActivityRings 
+            moveVal={Math.max(healthData.activeCalories, dailyTotals.calories)} 
+            moveTarget={600} 
+            exerciseVal={Math.max(healthData.exerciseMinutes, 15)} 
+            exerciseTarget={30} 
+            standVal={8} 
+            standTarget={12} 
+            styles={styles} 
+            isDark={isDark} 
           />
         </View>
 
         <View style={styles.insightsSection}>
           <View style={styles.insightsHeader}>
             <Text style={styles.insightsTitle}>Proactive Insights</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/fitness')}>
               <Text style={styles.insightsLink}>View History</Text>
             </TouchableOpacity>
           </View>
 
           {/* Insight Card 1 */}
-          <View style={styles.insightCard1}>
-            <View style={styles.insightIcon1Container}>
-              <MaterialIcons name="restaurant" size={24} color="#ffffff" />
-            </View>
-            <View style={styles.insightContent}>
-              <View style={styles.insightTitleRow}>
-                <Text style={styles.insightTitle1}>Protein intake is low</Text>
-                <View style={styles.badgeCritical}>
-                  <Text style={styles.badgeCriticalText}>CRITICAL</Text>
+          {showInsight && (
+            <View style={styles.insightCard1}>
+              <View style={styles.insightIcon1Container}>
+                <MaterialIcons name="restaurant" size={24} color="#ffffff" />
+              </View>
+              <View style={styles.insightContent}>
+                <View style={styles.insightTitleRow}>
+                  <Text style={styles.insightTitle1}>Protein intake is low</Text>
+                  <View style={styles.badgeCritical}>
+                    <Text style={styles.badgeCriticalText}>CRITICAL</Text>
+                  </View>
+                </View>
+                <Text style={styles.insightBody1}>
+                  You're currently 45g short of your daily target. Consuming protein in your next meal will help maintain the muscle recovery from yesterday's heavy session.
+                </Text>
+                <View style={styles.insightActions}>
+                  <TouchableOpacity 
+                    style={styles.btnPrimary}
+                    onPress={() => router.push('/(tabs)/nutrition')}
+                  >
+                    <Text style={styles.btnPrimaryText}>Log Meal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.btnSecondary}
+                    onPress={() => setShowInsight(false)}
+                  >
+                    <Text style={styles.btnSecondaryText}>Dismiss</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-              <Text style={styles.insightBody1}>
-                You're currently 45g short of your daily target. Consuming protein in your next meal will help maintain the muscle recovery from yesterday's heavy session.
-              </Text>
-              <View style={styles.insightActions}>
-                <TouchableOpacity style={styles.btnPrimary}>
-                  <Text style={styles.btnPrimaryText}>Log Meal</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.btnSecondary}>
-                  <Text style={styles.btnSecondaryText}>Dismiss</Text>
-                </TouchableOpacity>
-              </View>
             </View>
-          </View>
+          )}
 
           {/* Insight Card 2 */}
           <View style={styles.insightCard2}>
@@ -154,50 +171,56 @@ export default function DashboardScreen() {
   );
 }
 
-function ActivityCard({ label, value, target, unit, color, icon, isDark, styles }: any) {
-  const percentage = Math.min(Math.round((value / target) * 100), 100);
-  const radius = 40;
-  const strokeWidth = 10;
-  const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+function NestedActivityRings({ moveVal, moveTarget, exerciseVal, exerciseTarget, standVal, standTarget, styles, isDark }: any) {
+  const rs = [50, 36, 22]; // Radii for Move, Exercise, Stand
+  const strk = 12; // stroke width
+  const center = 70; // cx, cy
+
+  const movePct = Math.min(moveVal / moveTarget, 1);
+  const exPct = Math.min(exerciseVal / exerciseTarget, 1);
+  const standPct = Math.min(standVal / standTarget, 1);
+
+  const getOffset = (r: number, pct: number) => {
+    const circ = 2 * Math.PI * r;
+    return circ - pct * circ;
+  };
 
   return (
-    <View style={styles.activityCard}>
-      <View style={styles.cardRingContainer}>
-        <Svg width="128" height="128" viewBox="0 0 100 100" style={styles.svgRing}>
-          {/* Background Circle */}
-          <Circle
-            cx="50"
-            cy="50"
-            r={radius}
-            stroke={color}
-            strokeOpacity={0.1}
-            strokeWidth={strokeWidth}
-            fill="transparent"
-          />
-          {/* Progress Circle */}
-          <Circle
-            cx="50"
-            cy="50"
-            r={radius}
-            stroke={color}
-            strokeWidth={strokeWidth}
-            fill="transparent"
-            strokeDasharray={circumference}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-          />
+    <View style={styles.nestedRingsContainer}>
+      <View style={styles.nestedRingsLeft}>
+        <Svg width="140" height="140" viewBox="0 0 140 140" style={styles.svgRing}>
+          {/* Background Rings */}
+          <Circle cx={center} cy={center} r={rs[0]} stroke="#ec5b13" strokeOpacity={0.15} strokeWidth={strk} fill="transparent" />
+          <Circle cx={center} cy={center} r={rs[1]} stroke="#10b981" strokeOpacity={0.15} strokeWidth={strk} fill="transparent" />
+          <Circle cx={center} cy={center} r={rs[2]} stroke="#0ea5e9" strokeOpacity={0.15} strokeWidth={strk} fill="transparent" />
+          {/* Active Rings */}
+          <Circle cx={center} cy={center} r={rs[0]} stroke="#ec5b13" strokeWidth={strk} fill="transparent" strokeDasharray={2 * Math.PI * rs[0]} strokeDashoffset={getOffset(rs[0], movePct)} strokeLinecap="round" />
+          <Circle cx={center} cy={center} r={rs[1]} stroke="#10b981" strokeWidth={strk} fill="transparent" strokeDasharray={2 * Math.PI * rs[1]} strokeDashoffset={getOffset(rs[1], exPct)} strokeLinecap="round" />
+          <Circle cx={center} cy={center} r={rs[2]} stroke="#0ea5e9" strokeWidth={strk} fill="transparent" strokeDasharray={2 * Math.PI * rs[2]} strokeDashoffset={getOffset(rs[2], standPct)} strokeLinecap="round" />
         </Svg>
-        <View style={styles.cardRingOverlay}>
-          <MaterialIcons name={icon} size={28} color={color} style={{marginBottom: 4}} />
-          <Text style={styles.cardRingPercent}>{percentage}%</Text>
-        </View>
       </View>
-      <View style={styles.cardTextContainer}>
-        <Text style={styles.cardLabel}>{label}</Text>
-        <Text style={styles.cardValue}>
-          {value} / {target} <Text style={styles.cardUnit}>{unit}</Text>
-        </Text>
+      <View style={styles.nestedRingsRight}>
+        <View style={styles.ringLegendItem}>
+          <MaterialIcons name="local-fire-department" size={16} color="#ec5b13" />
+          <View>
+            <Text style={styles.ringLegendLabel}>Move</Text>
+            <Text style={styles.ringLegendValue}>{moveVal}/{moveTarget} kcal</Text>
+          </View>
+        </View>
+        <View style={styles.ringLegendItem}>
+          <MaterialIcons name="fitness-center" size={16} color="#10b981" />
+          <View>
+            <Text style={styles.ringLegendLabel}>Exercise</Text>
+            <Text style={styles.ringLegendValue}>{exerciseVal}/{exerciseTarget} min</Text>
+          </View>
+        </View>
+        <View style={styles.ringLegendItem}>
+          <MaterialIcons name="accessibility-new" size={16} color="#0ea5e9" />
+          <View>
+            <Text style={styles.ringLegendLabel}>Stand</Text>
+            <Text style={styles.ringLegendValue}>{standVal}/{standTarget} hr</Text>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -302,55 +325,47 @@ const createStyles = (isDark: boolean) => {
       gap: 16,
       marginBottom: 32,
     },
-    activityCard: {
+    nestedRingsContainer: {
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      padding: 24,
       backgroundColor: cardBg,
       borderRadius: 24,
       borderWidth: 1,
       borderColor: borderColor,
+      padding: 24,
+      gap: 24,
     },
-    cardRingContainer: {
-      width: 128,
-      height: 128,
+    nestedRingsLeft: {
+      width: 140,
+      height: 140,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: 16,
     },
     svgRing: {
       transform: [{ rotate: '-90deg' }],
     },
-    cardRingOverlay: {
-      position: 'absolute',
-      alignItems: 'center',
+    nestedRingsRight: {
+      flex: 1,
+      gap: 16,
       justifyContent: 'center',
-      top: 0, left: 0, right: 0, bottom: 0,
     },
-    cardRingPercent: {
-      fontSize: 22,
-      fontWeight: '700',
-      color: textMain,
+    ringLegendItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
     },
-    cardTextContainer: {
-      alignItems: 'center',
-    },
-    cardLabel: {
+    ringLegendLabel: {
       fontSize: 14,
       fontWeight: '600',
       color: textMuted,
       textTransform: 'uppercase',
-      letterSpacing: 2,
+      letterSpacing: 1,
+      marginBottom: 2,
     },
-    cardValue: {
-      fontSize: 18,
+    ringLegendValue: {
+      fontSize: 16,
       fontWeight: '700',
       color: textMain,
-    },
-    cardUnit: {
-      fontSize: 14,
-      fontWeight: '400',
-      color: isDark ? '#64748b' : '#94a3b8',
     },
     insightsSection: {
       maxWidth: 600,

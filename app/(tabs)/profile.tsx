@@ -25,8 +25,10 @@ import {
 } from '../../src/services/notifications/notifications';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = useMemo(() => createStyles(isDark), [isDark]);
@@ -51,6 +53,10 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: signOut },
     ]);
+  };
+
+  const handleComingSoon = (feature: string) => {
+    Alert.alert('Feature Not Available', `${feature} is currently under development and will be available in a future update.`);
   };
 
   const handleToggleWorkout = async (nextValue: boolean) => {
@@ -124,7 +130,7 @@ export default function ProfileScreen() {
 
       <View style={styles.headerTop}>
         <Text style={styles.headerTitleFixed}>Settings</Text>
-        <TouchableOpacity style={styles.editButton}>
+        <TouchableOpacity style={styles.editButton} onPress={() => router.push({ pathname: '/modal', params: { type: 'profile' } })}>
           <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
       </View>
@@ -148,15 +154,15 @@ export default function ProfileScreen() {
 
         {/* Action Buttons Grid */}
         <View style={styles.quickActionsGrid}>
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/(tabs)/fitness')}>
             <Text style={styles.quickActionCount}>31</Text>
             <Text style={styles.quickActionLabel}>Workouts</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/(tabs)/fitness')}>
             <Text style={styles.quickActionCount}>14</Text>
             <Text style={styles.quickActionLabel}>Day Streak</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionCard}>
+          <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/(tabs)/nutrition')}>
             <Text style={styles.quickActionCount}>4.2k</Text>
             <Text style={styles.quickActionLabel}>Avg Kcal</Text>
           </TouchableOpacity>
@@ -175,7 +181,7 @@ export default function ProfileScreen() {
             </View>
             <Switch
               value={true}
-              onValueChange={() => {}}
+              onValueChange={() => handleComingSoon('Device Settings')}
               trackColor={{ true: '#ec5b13' }}
             />
           </View>
@@ -189,7 +195,7 @@ export default function ProfileScreen() {
             </View>
             <Switch
               value={true}
-              onValueChange={() => {}}
+              onValueChange={() => handleComingSoon('Device Settings')}
               trackColor={{ true: '#ec5b13' }}
             />
           </View>
@@ -198,7 +204,7 @@ export default function ProfileScreen() {
         {/* Health Biometrics */}
         <Text style={styles.sectionHeader}>HEALTH BIOMETRICS</Text>
         <View style={styles.sectionBlock}>
-          <TouchableOpacity style={styles.infoRow}>
+          <TouchableOpacity style={styles.infoRow} onPress={() => router.push({ pathname: '/modal', params: { type: 'profile' } })}>
             <View style={styles.infoRowLeft}>
               <MaterialIcons name="height" size={20} color={isDark ? '#cbd5e1' : '#475569'} />
               <Text style={styles.infoLabel}>Height</Text>
@@ -208,7 +214,7 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.infoRow}>
+          <TouchableOpacity style={styles.infoRow} onPress={() => router.push({ pathname: '/modal', params: { type: 'profile' } })}>
             <View style={styles.infoRowLeft}>
               <MaterialIcons name="monitor-weight" size={20} color={isDark ? '#cbd5e1' : '#475569'} />
               <Text style={styles.infoLabel}>Weight</Text>
@@ -218,7 +224,7 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={20} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+          <TouchableOpacity style={[styles.infoRow, { borderBottomWidth: 0 }]} onPress={() => router.push({ pathname: '/modal', params: { type: 'goal' } })}>
             <View style={styles.infoRowLeft}>
               <MaterialIcons name="track-changes" size={20} color={isDark ? '#cbd5e1' : '#475569'} />
               <Text style={styles.infoLabel}>Fitness Goal</Text>
@@ -257,13 +263,13 @@ export default function ProfileScreen() {
               trackColor={{ true: '#ec5b13' }}
             />
           </View>
-          <TouchableOpacity style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+          <TouchableOpacity style={[styles.infoRow, { borderBottomWidth: 0 }]} onPress={() => handleComingSoon('App Theme Customization')}>
             <View style={styles.infoRowLeft}>
               <MaterialIcons name="dark-mode" size={20} color={isDark ? '#cbd5e1' : '#475569'} />
               <Text style={styles.infoLabel}>App Theme</Text>
             </View>
             <View style={styles.infoRowRight}>
-              <Text style={styles.infoValue}>System Dropdown Placeholder</Text>
+              <Text style={styles.infoValue}>System Settings</Text>
               <MaterialIcons name="chevron-right" size={20} color={isDark ? '#475569' : '#94a3b8'} />
             </View>
           </TouchableOpacity>

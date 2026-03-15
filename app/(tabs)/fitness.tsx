@@ -8,7 +8,7 @@
  * - Today's Plan with workout items (images, tags)
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,14 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColorScheme } from '../../components/useColorScheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useAuthStore } from '../../src/stores/useAuthStore';
+import { useFitnessStore } from '../../src/stores/useFitnessStore';
 
 // ════════════════════════════════════════
 // MOCK DATA
@@ -32,39 +35,14 @@ const watchStats = {
   calories: { value: 450, unit: 'kcal', change: '-2%', label: 'Active Calories' },
 };
 
-const todaysWorkouts = [
-  {
-    id: '1',
-    title: 'Morning Yoga',
-    duration: '20 mins',
-    intensity: 'Low Intensity',
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDB88a47Jpcimg28cy3e7XnZnKQMl0fa_vRd1MOx0ufcd4vw3FMaWOfThZovxZfUZ5rhmvYquoBCtamqEqCTpEvSYgnhgJVuC4IFBNrz34Zz8qmjOFv9ikOiDWEUU-zmCLDOuz8Q7tM0zD3JObv1YZOso_qUlbDqMQF_0l18jFJjnyWDZuJBd32P5XlE7atF9hue-HCvPqEUFnit44Ele_NzPTva78Ih9S9TZwfuBU6sEgO8HKgCNAtyMD0G7Hxlfcy645MbENYF0Zi',
-    tags: ['Flexibility', 'Beginner'],
-  },
-  {
-    id: '2',
-    title: 'Full Body Strength',
-    duration: '45 mins',
-    intensity: 'High Intensity',
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBeJ1F6OC1OjiojCiYc-wlyLT6VrEcz6lbOTSFEYslRRMG85giNYppbsSIYvpUNyrAED5QO_gkjg-gO-oqvoltz9GVAfGTYop9DOZlcGdOVJgrJ_EbhNvttf1duJ4Ypt5VYcGpkhpMnFPUC3gPUIcLUSyTZirOVvb2HM8eZT5i2sGtQSRwadlXwnKjyIOGdZUtJIWZgWxo72vYucfSyVhWJG2OhyPSyGpO0JuFSBhUv1dS87sGfzobY2I8CJUlK9ORCnZBozEv6BSM',
-    tags: ['Strength', 'Advanced'],
-    isHighlight: true,
-  },
-  {
-    id: '3',
-    title: 'Evening HIIT',
-    duration: '15 mins',
-    intensity: 'Intense',
-    image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDI9JknLAESf0yhqSAll8-nKsTmN0rBPbiNucryE6mmA_3hzXyNw-dco9wnnLmgecMnkptZ8AtsqD3SnHZ_VpiBEXB4-_zkpT3BsSsrwGVvoldtpG7KbRzJQUPudds1flmgiztgNEqzaLXFWSZC5CY2_6ycctCCOJfyMRjolqT_EPfiws-d1AWWGRbyMuSF750_FCArrIjOnnUQ0Uv1bBTovgRXOInMzTFmdIH-gdtCU5CkKvFK_akZ_d73KFpMd8ckR__5cnbjA3E7',
-    tags: ['Cardio'],
-  },
-];
-
 const todayDate = new Date().toLocaleDateString('en-US', {
   weekday: 'long',
   month: 'short',
   day: 'numeric',
 });
+
+// Fallback image for workouts
+const FALLBACK_WORKOUT_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuDB88a47Jpcimg28cy3e7XnZnKQMl0fa_vRd1MOx0ufcd4vw3FMaWOfThZovxZfUZ5rhmvYquoBCtamqEqCTpEvSYgnhgJVuC4IFBNrz34Zz8qmjOFv9ikOiDWEUU-zmCLDOuz8Q7tM0zD3JObv1YZOso_qUlbDqMQF_0l18jFJjnyWDZuJBd32P5XlE7atF9hue-HCvPqEUFnit44Ele_NzPTva78Ih9S9TZwfuBU6sEgO8HKgCNAtyMD0G7Hxlfcy645MbENYF0Zi';
 
 // ════════════════════════════════════════
 // SCREEN
@@ -76,21 +54,37 @@ export default function FitnessScreen() {
   const styles = useMemo(() => createStyles(isDark), [isDark]);
   const router = useRouter();
 
-  const handleGenerateWorkout = () => {
-    Alert.alert(
-      'Generate Workout',
-      'AI will create a personalized workout based on your Apple Watch data and recovery status.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Generate', onPress: () => Alert.alert('✨ Workout Generated!', 'Your dynamic workout plan is ready.') },
-      ]
-    );
+  const { user } = useAuthStore();
+  const { todaysWorkouts, fetchTodaysWorkouts, activePlan, fetchActivePlan, generateWorkout, isLoading } = useFitnessStore();
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchTodaysWorkouts(user.id);
+      fetchActivePlan(user.id);
+    }
+  }, [user?.id]);
+
+  const handleGenerateWorkout = async () => {
+    if (!user?.id) return;
+    try {
+      await generateWorkout(user.id, 'daily', []); // Request daily plan
+      Alert.alert('✨ Success', 'Your dynamic workout plan is ready!');
+    } catch (err: any) {
+      Alert.alert('Generation Failed', err.message);
+    }
   };
 
-  const handleWorkoutPress = (workout: typeof todaysWorkouts[0]) => {
+  const handleWorkoutPress = (workout: any) => {
     (router.push as any)({
       pathname: '/workout-detail',
-      params: { title: workout.title },
+      params: { title: workout.title || workout.workoutType },
+    });
+  };
+
+  const handleDayPress = (day: any) => {
+    (router.push as any)({
+      pathname: '/workout-detail',
+      params: { title: day.dayName || day.focus },
     });
   };
 
@@ -163,72 +157,105 @@ export default function FitnessScreen() {
           style={styles.generateBtn}
           activeOpacity={0.8}
           onPress={handleGenerateWorkout}
+          disabled={isLoading}
         >
-          <MaterialIcons name="auto-awesome" size={24} color="#ffffff" />
-          <Text style={styles.generateBtnText}>Generate Dynamic Workout</Text>
+          {isLoading ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <>
+              <MaterialIcons name="auto-awesome" size={24} color="#ffffff" />
+              <Text style={styles.generateBtnText}>Generate Dynamic Workout</Text>
+            </>
+          )}
         </TouchableOpacity>
 
-        {/* Today's Plan */}
+        {/* Active AI Plan */}
+        {activePlan && (
+          <View style={[styles.planSection, { marginBottom: 24 }]}>
+            <View style={styles.planHeaderRow}>
+              <Text style={styles.planTitle}>✨ Active Plan</Text>
+              <Text style={styles.viewAllText}>{activePlan.title}</Text>
+            </View>
+
+            {activePlan.planData.map((day: any, i: number) => (
+              <TouchableOpacity
+                key={`day-${i}`}
+                style={styles.workoutCard}
+                activeOpacity={0.7}
+                onPress={() => handleDayPress(day)}
+              >
+                <View style={styles.workoutImageContainer}>
+                  <Image
+                    source={{ uri: FALLBACK_WORKOUT_IMG }}
+                    style={styles.workoutImage}
+                  />
+                </View>
+                <View style={styles.workoutInfo}>
+                  <Text style={styles.workoutTitle}>{day.dayName}</Text>
+                  <Text style={styles.workoutMeta}>
+                    {day.focus} • {day.estimatedDurationMin ? `${day.estimatedDurationMin} mins` : 'N/A'}
+                  </Text>
+                  <View style={styles.tagsRow}>
+                    <View style={[styles.tag, styles.tagHighlight]}>
+                      <Text style={[styles.tagText, styles.tagTextHighlight]}>
+                        AI Generated
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Today's Logged Workouts */}
         <View style={styles.planSection}>
           <View style={styles.planHeaderRow}>
-            <Text style={styles.planTitle}>Today's Plan</Text>
-            <TouchableOpacity>
+            <Text style={styles.planTitle}>Completed Today</Text>
+            <TouchableOpacity onPress={() => Alert.alert('History', 'Full history implementation coming soon.')}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
 
-          {todaysWorkouts.map((workout) => (
-            <TouchableOpacity
-              key={workout.id}
-              style={styles.workoutCard}
-              activeOpacity={0.7}
-              onPress={() => handleWorkoutPress(workout)}
-            >
-              <View style={styles.workoutImageContainer}>
-                <Image
-                  source={{ uri: workout.image }}
-                  style={styles.workoutImage}
-                />
-              </View>
-              <View style={styles.workoutInfo}>
-                <Text style={styles.workoutTitle}>{workout.title}</Text>
-                <Text style={styles.workoutMeta}>
-                  {workout.duration} • {workout.intensity}
-                </Text>
-                <View style={styles.tagsRow}>
-                  {workout.tags.map((tag) => (
-                    <View
-                      key={tag}
-                      style={[
-                        styles.tag,
-                        workout.isHighlight && tag === workout.tags[0]
-                          ? styles.tagHighlight
-                          : null,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.tagText,
-                          workout.isHighlight && tag === workout.tags[0]
-                            ? styles.tagTextHighlight
-                            : null,
-                        ]}
-                      >
-                        {tag}
+          {todaysWorkouts.length === 0 ? (
+            <Text style={{ color: isDark ? '#94a3b8' : '#64748b' }}>No workouts completed today.</Text>
+          ) : (
+            todaysWorkouts.map((workout, index) => (
+              <TouchableOpacity
+                key={workout.id}
+                style={styles.workoutCard}
+                activeOpacity={0.7}
+                onPress={() => handleWorkoutPress(workout)}
+              >
+                <View style={styles.workoutImageContainer}>
+                  <Image
+                    source={{ uri: FALLBACK_WORKOUT_IMG }}
+                    style={styles.workoutImage}
+                  />
+                </View>
+                <View style={styles.workoutInfo}>
+                  <Text style={styles.workoutTitle}>{workout.title || workout.workoutType}</Text>
+                  <Text style={styles.workoutMeta}>
+                    {workout.durationMinutes ? `${workout.durationMinutes} mins` : 'Completed'} • {workout.caloriesBurned ? `${workout.caloriesBurned} kcal` : 'N/A'}
+                  </Text>
+                  <View style={styles.tagsRow}>
+                    <View style={[styles.tag, index === 0 ? styles.tagHighlight : null]}>
+                      <Text style={[styles.tagText, index === 0 ? styles.tagTextHighlight : null]}>
+                        {workout.workoutType.charAt(0).toUpperCase() + workout.workoutType.slice(1)}
                       </Text>
                     </View>
-                  ))}
+                  </View>
                 </View>
-              </View>
-              <TouchableOpacity style={styles.moreButton}>
-                <MaterialIcons
-                  name="more-vert"
-                  size={20}
-                  color={isDark ? '#64748b' : '#94a3b8'}
-                />
+                <TouchableOpacity style={styles.moreButton}>
+                  <MaterialIcons
+                    name="more-vert"
+                    size={20}
+                    color={isDark ? '#64748b' : '#94a3b8'}
+                  />
+                </TouchableOpacity>
               </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
