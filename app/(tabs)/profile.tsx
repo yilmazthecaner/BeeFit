@@ -12,11 +12,15 @@ import {
   Alert,
   Switch,
   Image,
+  ActivityIndicator,
+  Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useColorScheme } from '../../components/useColorScheme';
 import { useNotificationSettingsStore } from '../../src/stores/useNotificationSettingsStore';
+import { useFitnessStore } from '../../src/stores/useFitnessStore';
 import {
   cancelScheduledNotifications,
   ensureNotificationPermissions,
@@ -34,6 +38,7 @@ export default function ProfileScreen() {
   const styles = useMemo(() => createStyles(isDark), [isDark]);
 
   const { user, signOut } = useAuthStore();
+  const { healthKitAuthorized, initializeHealthKit, lastSyncAt, isSyncing } = useFitnessStore();
   const {
     workoutRemindersEnabled,
     mealLoggingEnabled,
@@ -47,6 +52,7 @@ export default function ProfileScreen() {
   
   const [updatingWorkout, setUpdatingWorkout] = useState(false);
   const [updatingMeals, setUpdatingMeals] = useState(false);
+  const [connectingDevice, setConnectingDevice] = useState(false);
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -57,6 +63,40 @@ export default function ProfileScreen() {
 
   const handleComingSoon = (feature: string) => {
     Alert.alert('Feature Not Available', `${feature} is currently under development and will be available in a future update.`);
+  };
+
+  const handleConnectDevice = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Not Supported', 'Device sync is currently available only on iOS via Apple Health.');
+      return;
+    }
+
+    if (connectingDevice) return;
+    setConnectingDevice(true);
+    try {
+      const granted = await initializeHealthKit();
+      if (granted) {
+        Alert.alert('Connected', 'Apple Health is now connected.');
+      } else {
+        Alert.alert('Permission Needed', 'Please allow Health access to connect your device.');
+      }
+    } catch (error) {
+      console.error('[Device] Connect failed', error);
+      Alert.alert('Connection Failed', 'Unable to connect at the moment. Please try again.');
+    } finally {
+      setConnectingDevice(false);
+    }
+  };
+
+  const handleOpenDeviceSettings = () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Not Supported', 'Device settings are available on iOS only.');
+      return;
+    }
+    Alert.alert('Manage Health Access', 'Open Settings to manage Apple Health permissions.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Open Settings', onPress: () => Linking.openSettings() },
+    ]);
   };
 
   const handleToggleWorkout = async (nextValue: boolean) => {
@@ -113,6 +153,9 @@ export default function ProfileScreen() {
 
   const displayName = user?.displayName ?? 'Alex';
   const email = user?.email ?? 'alex@example.com';
+  const lastSyncLabel = lastSyncAt
+    ? new Date(lastSyncAt).toLocaleString()
+    : 'Not synced yet';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -171,19 +214,21 @@ export default function ProfileScreen() {
         {/* Connected Devices */}
         <Text style={styles.sectionHeader}>CONNECTED DEVICES</Text>
         <View style={styles.sectionBlock}>
-          {user?.hasSmartDevice ? (
+          {healthKitAuthorized ? (
             <>
               <View style={styles.deviceRow}>
                 <View style={[styles.deviceIconBg, { backgroundColor: '#10b981' }]}>
                   <MaterialIcons name="watch" size={24} color="#ffffff" />
                 </View>
                 <View style={styles.deviceInfo}>
-                  <Text style={styles.deviceName}>Apple Watch Ultra</Text>
-                  <Text style={styles.deviceStatus}>Connected • Battery 82%</Text>
+                  <Text style={styles.deviceName}>Apple Health</Text>
+                  <Text style={styles.deviceStatus}>
+                    {isSyncing ? 'Syncing…' : `Last sync: ${lastSyncLabel}`}
+                  </Text>
                 </View>
                 <Switch
                   value={true}
-                  onValueChange={() => handleComingSoon('Device Settings')}
+                  onValueChange={handleOpenDeviceSettings}
                   trackColor={{ true: '#ec5b13' }}
                 />
               </View>
@@ -193,11 +238,11 @@ export default function ProfileScreen() {
                 </View>
                 <View style={styles.deviceInfo}>
                   <Text style={styles.deviceName}>Smart Scale</Text>
-                  <Text style={styles.deviceStatus}>Last sync: Today, 7:00 AM</Text>
+                  <Text style={styles.deviceStatus}>Coming soon</Text>
                 </View>
                 <Switch
                   value={true}
-                  onValueChange={() => handleComingSoon('Device Settings')}
+                  onValueChange={() => handleComingSoon('Smart Scale')}
                   trackColor={{ true: '#ec5b13' }}
                 />
               </View>
@@ -205,10 +250,17 @@ export default function ProfileScreen() {
           ) : (
             <TouchableOpacity 
               style={[styles.infoRow, { justifyContent: 'center', borderBottomWidth: 0, paddingVertical: 20 }]}
-              onPress={() => handleComingSoon('Connect Device')}
+              onPress={handleConnectDevice}
+              disabled={connectingDevice}
             >
-              <MaterialIcons name="add-circle-outline" size={24} color="#ec5b13" style={{ marginRight: 8 }} />
-              <Text style={[styles.infoLabel, { color: '#ec5b13', fontWeight: '600' }]}>Connect a Device</Text>
+              {connectingDevice ? (
+                <ActivityIndicator color="#ec5b13" style={{ marginRight: 8 }} />
+              ) : (
+                <MaterialIcons name="add-circle-outline" size={24} color="#ec5b13" style={{ marginRight: 8 }} />
+              )}
+              <Text style={[styles.infoLabel, { color: '#ec5b13', fontWeight: '600' }]}>
+                {connectingDevice ? 'Connecting…' : 'Connect a Device'}
+              </Text>
             </TouchableOpacity>
           )}
         </View>

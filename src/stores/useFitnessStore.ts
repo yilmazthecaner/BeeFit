@@ -18,12 +18,13 @@ interface FitnessState {
     activeCalories: number;
     exerciseMinutes: number;
   };
+  healthKitAuthorized: boolean;
   isLoading: boolean;
   isSyncing: boolean;
   lastSyncAt: string | null;
 
   // ── Actions ──
-  initializeHealthKit: () => Promise<void>;
+  initializeHealthKit: () => Promise<boolean>;
   fetchHealthKitData: () => Promise<void>;
   fetchTodaysWorkouts: (userId: string) => Promise<void>;
   fetchWeeklyWorkouts: (userId: string) => Promise<void>;
@@ -43,12 +44,17 @@ export const useFitnessStore = create<FitnessState>((set, get) => ({
     activeCalories: 0,
     exerciseMinutes: 0,
   },
+  healthKitAuthorized: false,
   isLoading: false,
   isSyncing: false,
   lastSyncAt: null,
 
   initializeHealthKit: async () => {
-    if (Platform.OS !== 'ios') return;
+    if (Platform.OS !== 'ios') {
+      set({ healthKitAuthorized: false });
+      return false;
+    }
+    if (get().healthKitAuthorized) return true;
     return new Promise((resolve) => {
       const permissions = {
         permissions: {
@@ -64,11 +70,13 @@ export const useFitnessStore = create<FitnessState>((set, get) => ({
       AppleHealthKit.initHealthKit(permissions, (error: string) => {
         if (error) {
           console.log('[ERROR] Cannot grant permissions to Apple HealthKit', error);
-          resolve(); // resolve anyway so app continues
+          set({ healthKitAuthorized: false });
+          resolve(false); // resolve anyway so app continues
           return;
         }
         console.log('[DEBUG] HealthKit permissions granted');
-        get().fetchHealthKitData().then(resolve);
+        set({ healthKitAuthorized: true });
+        get().fetchHealthKitData().then(() => resolve(true));
       });
     });
   },
@@ -116,7 +124,8 @@ export const useFitnessStore = create<FitnessState>((set, get) => ({
         steps: Math.round(steps),
         activeCalories: Math.round(activeCalories),
         exerciseMinutes: Math.round(exerciseMinutes),
-      }
+      },
+      lastSyncAt: new Date().toISOString(),
     }));
   },
 
