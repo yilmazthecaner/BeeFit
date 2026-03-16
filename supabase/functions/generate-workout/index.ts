@@ -24,18 +24,44 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { userId, planType, equipment } = await req.json();
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Fetch user profile
+    // Get user from auth header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) throw new Error('No authorization header');
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (authError || !authUser) throw new Error('Unauthorized');
+
+    // Check usage limits and subscription status
+    const { data: usageData, error: usageError } = await supabase
+      .rpc('check_and_reset_ai_usage', { user_uuid: authUser.id });
+
+    if (usageError) throw usageError;
+    const { status, usage_count } = usageData[0];
+
+    // Limit check for Free users (1 workout generation/day)
+    const MAX_FREE_WORKOUTS = 1;
+    if (status === 'free' && usage_count >= MAX_FREE_WORKOUTS) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Daily workout generation limit reached', 
+          code: 'LIMIT_REACHED',
+          message: 'Günlük antrenman oluşturma limitine ulaştın. Sınırsız antrenman için Premium\'a geç!' 
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { userId, planType, equipment } = await req.json();
+
+    // Fetch user profile (redundant check but keeps consistency)
     const { data: user } = await supabase
       .from('users')
       .select('*')
-      .eq('id', userId)
+      .eq('id', authUser.id)
       .single();
 
     if (!user) {
@@ -52,13 +78,13 @@ serve(async (req: Request) => {
     const { data: recentWorkouts } = await supabase
       .from('workout_logs')
       .select('workout_type, title, duration_minutes, calories_burned, exercises, logged_at')
-      .eq('user_id', userId)
+      .eq('user_id', authUser.id)
       .gte('logged_at', weekAgo.toISOString())
       .order('logged_at', { ascending: false })
       .limit(10);
 
-    // Build the prompt
-    const prompt = buildWorkoutPrompt(user, planType, equipment, recentWorkouts ?? []);
+    // Build the prompt - passing subscription status to build personalized vs basic plan
+    const prompt = buildWorkoutPrompt(user, planType, equipment, recentWorkouts ?? [], status === 'premium' || status === 'trialing');
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -93,7 +119,7 @@ serve(async (req: Request) => {
     const { data: plan, error } = await supabase
       .from('workout_plans')
       .insert({
-        user_id: userId,
+        user_id: authUser.id,
         title: planData.title ?? `${planType} Plan`,
         plan_type: planType,
         goal: user.fitness_goal,
@@ -111,8 +137,19 @@ serve(async (req: Request) => {
     await supabase
       .from('workout_plans')
       .update({ is_active: false })
-      .eq('user_id', userId)
+      .eq('user_id', authUser.id)
       .neq('id', plan.id);
+
+    // Increment usage count for Free users
+    if (status === 'free') {
+      await supabase
+        .from('users')
+        .update({ 
+          daily_ai_usage_count: usage_count + 1,
+          last_ai_usage_at: new Date().toISOString()
+        })
+        .eq('id', authUser.id);
+    }
 
     return new Response(
       JSON.stringify({ plan }),
@@ -124,13 +161,13 @@ serve(async (req: Request) => {
   } catch (error) {
     console.error('[generate-workout] Error:', error);
     const errorMsg = error.message || 'Unknown error';
-    const isClientError = errorMsg.includes('required') || errorMsg.includes('not found') || errorMsg.includes('quota');
+    const isClientError = errorMsg.includes('required') || errorMsg.includes('not found') || errorMsg.includes('quota') || errorMsg.includes('limit reached');
     const safeErrorMsg = isClientError ? errorMsg : 'An internal server error occurred while processing your request. Please try again later.';
 
     return new Response(
       JSON.stringify({ error: safeErrorMsg }),
       {
-        status: 500,
+        status: errorMsg.includes('limit') ? 403 : 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
@@ -141,9 +178,24 @@ function buildWorkoutPrompt(
   user: any,
   planType: string,
   equipment: string[],
-  recentWorkouts: any[]
+  recentWorkouts: any[],
+  isPremium: boolean
 ): string {
   const daysCount = planType === 'daily' ? 1 : planType === 'weekly' ? 7 : 30;
+
+  let detailInstruction = '';
+  if (isPremium) {
+    detailInstruction = `
+- Provide a HIGHLY DETAILED and PERSONALIZED plan.
+- Include advanced techniques (supersets, drop sets, etc.) if applicable.
+- Tailor precisely to past performance and goals.
+- Include detailed warm-up and cool-down instructions.`;
+  } else {
+    detailInstruction = `
+- Provide a BASIC, Standard level plan. 
+- Stick to fundamental exercises and routines.
+- This is a free-tier basic plan.`;
+  }
 
   return `Generate a ${planType} workout plan for this person:
 
@@ -161,6 +213,8 @@ ${recentWorkouts.length > 0
   ? recentWorkouts.map(w => `- ${w.title ?? w.workout_type}: ${w.duration_minutes ?? '?'} min`).join('\n')
   : 'No recent workouts'
 }
+
+TIER INSTRUCTIONS:${detailInstruction}
 
 Generate a plan with ${daysCount} days. For each day, include:
 - dayNumber (1-indexed)

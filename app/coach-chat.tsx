@@ -28,6 +28,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCoachStore } from '../src/stores/useCoachStore';
 import { useAuthStore } from '../src/stores/useAuthStore';
+import { useSubscription } from '../src/hooks/useSubscription';
+
+// Safe Ad Mob Import
+let InterstitialAd: any = null;
+let AdEventType: any = null;
+let TestIds: any = null;
+try {
+  const Ads = require('react-native-google-mobile-ads');
+  InterstitialAd = Ads.InterstitialAd;
+  AdEventType = Ads.AdEventType;
+  TestIds = Ads.TestIds;
+} catch (e) {}
 
 export default function CoachChatScreen() {
   const colorScheme = useColorScheme();
@@ -36,6 +48,7 @@ export default function CoachChatScreen() {
   const router = useRouter();
 
   const { user } = useAuthStore();
+  const { isPremium } = useSubscription();
   const {
     messages,
     isLoading,
@@ -43,6 +56,20 @@ export default function CoachChatScreen() {
     initializeCoach,
     sendMessage,
   } = useCoachStore();
+
+  const adUnitId = (__DEV__ && TestIds) ? TestIds.INTERSTITIAL : 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx';
+  const interstitial = useMemo(() => (InterstitialAd ? InterstitialAd.createForAdRequest(adUnitId, {
+    requestNonPersonalizedAdsOnly: true,
+  }) : null), [adUnitId]);
+
+  useEffect(() => {
+    if (!interstitial) return;
+    const unsubscribe = interstitial.addAdEventListener(AdEventType.LOADED, () => {
+      // Ad loaded
+    });
+    interstitial.load();
+    return unsubscribe;
+  }, [interstitial]);
 
   const [inputText, setInputText] = useState('');
   const scrollRef = useRef<ScrollView>(null);
@@ -64,13 +91,32 @@ export default function CoachChatScreen() {
     const text = inputText.trim();
     if (!text || isLoading) return;
     setInputText('');
-    await sendMessage(text);
+    try {
+      await sendMessage(text);
+      // Show ad for free users after message if loaded
+      if (!isPremium && interstitial?.loaded) {
+        interstitial.show();
+      }
+    } catch (error: any) {
+      if (error.message?.includes('limit')) {
+        router.push('/paywall' as any);
+      }
+    }
   };
 
   const handleSuggestionPress = async (suggestion: string) => {
     if (isLoading) return;
     setInputText('');
-    await sendMessage(suggestion);
+    try {
+      await sendMessage(suggestion);
+      if (!isPremium && interstitial?.loaded) {
+        interstitial.show();
+      }
+    } catch (error: any) {
+      if (error.message?.includes('limit')) {
+        router.push('/paywall' as any);
+      }
+    }
   };
 
   const now = new Date();

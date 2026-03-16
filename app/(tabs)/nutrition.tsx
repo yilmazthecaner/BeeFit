@@ -24,6 +24,19 @@ import type { MealLog } from '../../src/types/nutrition';
 import { useColorScheme } from '../../components/useColorScheme';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSubscription } from '../../src/hooks/useSubscription';
+import { useRouter } from 'expo-router';
+
+// Safe Ad Mob Import
+let InterstitialAd: any = null;
+let AdEventType: any = null;
+let TestIds: any = null;
+try {
+  const Ads = require('react-native-google-mobile-ads');
+  InterstitialAd = Ads.InterstitialAd;
+  AdEventType = Ads.AdEventType;
+  TestIds = Ads.TestIds;
+} catch (e) {}
 
 export default function NutritionScreen() {
   const colorScheme = useColorScheme();
@@ -31,7 +44,23 @@ export default function NutritionScreen() {
   const styles = useMemo(() => createStyles(isDark), [isDark]);
 
   const { user } = useAuthStore();
+  const { isPremium } = useSubscription();
+  const router = useRouter();
   const { todaysMeals, isLoading: storeLoading, fetchTodaysMeals, getDailyTotals } = useNutritionStore();
+  
+  const adUnitId = (__DEV__ && TestIds) ? TestIds.INTERSTITIAL : 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx';
+  const interstitial = useMemo(() => (InterstitialAd ? InterstitialAd.createForAdRequest(adUnitId, {
+    requestNonPersonalizedAdsOnly: true,
+  }) : null), [adUnitId]);
+
+  useEffect(() => {
+    if (!interstitial) return;
+    const unsubscribe = interstitial.addAdEventListener(AdEventType.LOADED, () => {
+      // Ad loaded
+    });
+    interstitial.load();
+    return unsubscribe;
+  }, [interstitial]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzingImageUri, setAnalyzingImageUri] = useState<string | null>(null);
 
@@ -84,14 +113,22 @@ export default function NutritionScreen() {
 
     try {
       if (user?.id) {
-        // Here we default to 'lunch' for the demo if type is needed
         const analyzer = new VisionAnalyzer(user.id);
         await analyzer.analyzeAndLogMeal(imageUri, 'lunch');
         await fetchTodaysMeals(user.id, selectedDate);
         Alert.alert('Meal Logged! 🐝', 'AI analyzed and logged your meal successfully.');
+        
+        // Show ad for free users after success
+        if (!isPremium && interstitial?.loaded) {
+          interstitial.show();
+        }
       }
-    } catch (error) {
-      Alert.alert('Error', 'Could not analyze the meal. Please try again.');
+    } catch (error: any) {
+      if (error.message?.includes('limit')) {
+        router.push('/paywall' as any);
+      } else {
+        Alert.alert('Error', 'Could not analyze the meal. Please try again.');
+      }
     } finally {
       setIsAnalyzing(false);
       setAnalyzingImageUri(null);

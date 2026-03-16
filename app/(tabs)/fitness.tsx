@@ -25,6 +25,18 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useFitnessStore } from '../../src/stores/useFitnessStore';
+import { useSubscription } from '../../src/hooks/useSubscription';
+
+// Safe Ad Mob Import
+let InterstitialAd: any = null;
+let AdEventType: any = null;
+let TestIds: any = null;
+try {
+  const Ads = require('react-native-google-mobile-ads');
+  InterstitialAd = Ads.InterstitialAd;
+  AdEventType = Ads.AdEventType;
+  TestIds = Ads.TestIds;
+} catch (e) {}
 
 // ════════════════════════════════════════
 // CONSTANTS
@@ -51,7 +63,22 @@ export default function FitnessScreen() {
   const router = useRouter();
 
   const { user } = useAuthStore();
+  const { isPremium } = useSubscription();
   const { healthData, todaysWorkouts, fetchTodaysWorkouts, activePlan, fetchActivePlan, generateWorkout, isLoading } = useFitnessStore();
+
+  const adUnitId = (__DEV__ && TestIds) ? TestIds.INTERSTITIAL : 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx';
+  const interstitial = useMemo(() => (InterstitialAd ? InterstitialAd.createForAdRequest(adUnitId, {
+    requestNonPersonalizedAdsOnly: true,
+  }) : null), [adUnitId]);
+
+  useEffect(() => {
+    if (!interstitial) return;
+    const unsubscribe = interstitial.addAdEventListener(AdEventType.LOADED, () => {
+      // Ad loaded
+    });
+    interstitial.load();
+    return unsubscribe;
+  }, [interstitial]);
 
   useEffect(() => {
     if (user?.id) {
@@ -65,8 +92,17 @@ export default function FitnessScreen() {
     try {
       await generateWorkout(user.id, 'daily', []); // Request daily plan
       Alert.alert('✨ Success', 'Your dynamic workout plan is ready!');
+      
+      // Show ad for free users after success
+      if (!isPremium && interstitial?.loaded) {
+        interstitial.show();
+      }
     } catch (err: any) {
-      Alert.alert('Generation Failed', err.message);
+      if (err.message?.includes('limit')) {
+        router.push('/paywall' as any);
+      } else {
+        Alert.alert('Generation Failed', err.message);
+      }
     }
   };
 

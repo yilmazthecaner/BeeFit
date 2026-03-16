@@ -11,6 +11,7 @@
 
 // @ts-nocheck — Deno runtime types
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,6 +24,42 @@ serve(async (req: Request) => {
   }
 
   try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Get the user from the authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('No authorization header');
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (authError || !user) {
+      throw new Error('Invalid token or user not found');
+    }
+
+    // Check usage limits and subscription status
+    const { data: usageData, error: usageError } = await supabase
+      .rpc('check_and_reset_ai_usage', { user_uuid: user.id });
+
+    if (usageError) throw usageError;
+    const { status, usage_count } = usageData[0];
+
+    // Limit check for Free users
+    const MAX_FREE_MESSAGES = 5;
+    if (status === 'free' && usage_count >= MAX_FREE_MESSAGES) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Daily AI limit reached', 
+          code: 'LIMIT_REACHED',
+          message: 'Günlük AI limitine ulaştın. Sınırsız sohbet için Premium\'a geç!' 
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { messages, model } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
@@ -137,6 +174,17 @@ serve(async (req: Request) => {
       throw new Error(`All available AI providers failed. Last error: ${lastError?.message}`);
     }
 
+    // Increment usage count for Free users
+    if (status === 'free') {
+      await supabase
+        .from('users')
+        .update({ 
+          daily_ai_usage_count: usage_count + 1,
+          last_ai_usage_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+    }
+
     return new Response(
       JSON.stringify({ reply, provider: successfulProvider }),
       {
@@ -147,13 +195,13 @@ serve(async (req: Request) => {
   } catch (error: any) {
     console.error('[coach-chat] Critical Error:', error.message);
     const errorMsg = error.message || 'Unknown error';
-    const isClientError = errorMsg.includes('required') || errorMsg.includes('not found') || errorMsg.includes('quota') || errorMsg.includes('limit');
+    const isClientError = errorMsg.includes('required') || errorMsg.includes('not found') || errorMsg.includes('quota') || errorMsg.includes('limit') || errorMsg.includes('Daily AI limit');
     const safeErrorMsg = isClientError ? errorMsg : 'An internal server error occurred while processing your request. Please try again later.';
 
     return new Response(
       JSON.stringify({ error: safeErrorMsg }),
       {
-        status: 500,
+        status: errorMsg.includes('limit') ? 403 : 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );

@@ -3,6 +3,8 @@
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { useSubscription } from '../../src/hooks/useSubscription';
+import { useNotificationSettingsStore } from '../../src/stores/useNotificationSettingsStore';
 import {
   View,
   Text,
@@ -19,7 +21,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useColorScheme } from '../../components/useColorScheme';
-import { useNotificationSettingsStore } from '../../src/stores/useNotificationSettingsStore';
 import { useFitnessStore } from '../../src/stores/useFitnessStore';
 import {
   cancelScheduledNotifications,
@@ -38,6 +39,7 @@ export default function ProfileScreen() {
   const styles = useMemo(() => createStyles(isDark), [isDark]);
 
   const { user, signOut } = useAuthStore();
+  const { tier, isPremium, loading: subLoading } = useSubscription();
   const { healthKitAuthorized, initializeHealthKit, lastSyncAt, isSyncing, healthData, todaysWorkouts, fetchTodaysWorkouts } = useFitnessStore();
   const {
     workoutRemindersEnabled,
@@ -72,6 +74,11 @@ export default function ProfileScreen() {
   };
 
   const handleConnectDevice = async () => {
+    if (!isPremium) {
+      router.push('/paywall' as any);
+      return;
+    }
+
     if (Platform.OS !== 'ios') {
       Alert.alert('Not Supported', 'Device sync is currently available only on iOS via Apple Health.');
       return;
@@ -208,6 +215,32 @@ export default function ProfileScreen() {
           <Text style={styles.userEmail}>{email}</Text>
           <Text style={styles.memberSince}>Member since 2023</Text>
         </View>
+
+        {/* Subscription Info Card */}
+        <TouchableOpacity 
+          style={[styles.subscriptionCard, tier === 'premium' ? styles.premiumCard : styles.freeCard]}
+          onPress={() => router.push('/paywall' as any)}
+        >
+          <View style={styles.subCardMain}>
+            <View style={styles.subIconBg}>
+              <MaterialIcons name={tier === 'premium' ? 'verified' : 'stars'} size={24} color={tier === 'premium' ? '#34c759' : '#ff9500'} />
+            </View>
+            <View style={styles.subInfo}>
+              <Text style={styles.subStatusText}>
+                {tier === 'premium' ? 'Premium Üye' : tier === 'trialing' ? 'Deneme Sürümü' : 'Ücretsiz Plan'}
+              </Text>
+              <Text style={styles.subDetailText}>
+                {tier === 'premium' ? 'Tüm özellikler açık' : tier === 'trialing' ? 'Limitleri kaldırmak için abone ol.' : 'AI özellikleri limitli.'}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#94a3b8" />
+          </View>
+          {tier === 'trialing' && (
+            <View style={styles.trialBar}>
+              <Text style={styles.trialBarText}>Deneme sürümün devam ediyor.</Text>
+            </View>
+          )}
+        </TouchableOpacity>
 
         {/* Action Buttons Grid */}
         <View style={styles.quickActionsGrid}>
@@ -588,6 +621,64 @@ const createStyles = (isDark: boolean) => {
       fontSize: 12,
       color: textMuted,
       marginBottom: 24,
+    },
+    subscriptionCard: {
+      borderRadius: 16,
+      borderWidth: 1,
+      marginBottom: 24,
+      overflow: 'hidden',
+    },
+    freeCard: {
+      backgroundColor: isDark ? 'rgba(255, 149, 0, 0.05)' : '#fff9f0',
+      borderColor: isDark ? 'rgba(255, 149, 0, 0.2)' : '#ffe8cc',
+    },
+    premiumCard: {
+      backgroundColor: isDark ? 'rgba(52, 199, 89, 0.05)' : '#f0fff4',
+      borderColor: isDark ? 'rgba(52, 199, 89, 0.2)' : '#c6f6d5',
+    },
+    subCardMain: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 16,
+      gap: 12,
+    },
+    subIconBg: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: isDark ? 'rgba(15, 23, 42, 0.5)' : '#ffffff',
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    subInfo: {
+      flex: 1,
+    },
+    subStatusText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: textMain,
+      marginBottom: 2,
+    },
+    subDetailText: {
+      fontSize: 13,
+      color: textMuted,
+    },
+    trialBar: {
+      backgroundColor: '#ff9500',
+      paddingVertical: 4,
+      alignItems: 'center',
+    },
+    trialBarText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: '#ffffff',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
   });
 };
