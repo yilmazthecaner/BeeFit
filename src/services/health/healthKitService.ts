@@ -278,6 +278,22 @@ export class HealthKitService {
     });
   }
 
+  /**
+   * Fetch today's exercise minutes.
+   */
+  async getTodaysExerciseMinutes(): Promise<number> {
+    if (!this.isReady) return 0;
+
+    const AppleHealthKit = await this.getHealthKitModule();
+    if (!AppleHealthKit) return 0;
+
+    // We can estimate this from workouts or use the activity summary if supported.
+    // For now, let's sum up today's workout durations.
+    const workouts = await this.getTodaysWorkouts();
+    const totalMinutes = workouts.reduce((sum, w) => sum + (w.durationMinutes || 0), 0);
+    return Math.round(totalMinutes);
+  }
+
   // ════════════════════════════════════════
   // FORMAT FOR BEEFIT
   // ════════════════════════════════════════
@@ -376,12 +392,41 @@ export class HealthKitService {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   private async getHealthKitModule(): Promise<any | null> {
     try {
+      // Check if running in Expo Go first
+      try {
+        const Constants = require('expo-constants').default;
+        // In newer Expo versions, appOwnership might be missing or different, 
+        // but 'expo' usually means Go. Also check if we're in a managed env without native code.
+        if (Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient') {
+          console.warn('[HealthKit] WARN: Running in Expo Go. Native modules like HealthKit are NOT supported. You MUST use a Development Build.');
+          console.warn('[HealthKit] Run this command to build and start your dev client: npx expo run:ios');
+          return null;
+        }
+      } catch (e) {
+        // Ignore constant errors
+      }
+
       // react-native-health needs to be installed separately
       // This dynamic import prevents crashes on non-iOS platforms
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const module = require('react-native-health');
-      return module.default ?? module;
-    } catch {
+      const AppleHealthKit = module.default ?? module;
+
+      // Validate the module has the expected init function
+      if (AppleHealthKit && typeof AppleHealthKit.initHealthKit === 'function') {
+        return AppleHealthKit;
+      }
+
+      // If we are here, the module loaded but the native part is missing
+      console.warn('[HealthKit] Warning: Module loaded but initHealthKit is missing.');
+      console.warn('[HealthKit] This usually means:');
+      console.warn('  1. You are in Expo Go (checked above, but might have missed it)');
+      console.warn('  2. You haven\'t run "npx expo run:ios" to sync native code');
+      console.warn('  3. The HealthKit capability is missing in Xcode');
+      
+      return null;
+    } catch (err) {
+      console.error('[HealthKit] Error: Module import failed. Is react-native-health installed?', err);
       return null;
     }
   }

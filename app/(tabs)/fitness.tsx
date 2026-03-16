@@ -27,10 +27,9 @@ import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useFitnessStore } from '../../src/stores/useFitnessStore';
 
 // ════════════════════════════════════════
-// MOCK DATA
+// CONSTANTS
 // ════════════════════════════════════════
 
-// Remove mock watchStats
 
 const todayDate = new Date().toLocaleDateString('en-US', {
   weekday: 'long',

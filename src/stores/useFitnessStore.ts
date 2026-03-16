@@ -5,8 +5,10 @@
 import { create } from 'zustand';
 import type { WorkoutLog, WorkoutPlan } from '../types/workout';
 import supabase from '../services/supabase/client';
-import AppleHealthKit, { HealthValue, HealthInputOptions } from 'react-native-health';
+import HealthKitService from '../services/health/healthKitService';
 import { Platform } from 'react-native';
+
+const healthKit = new HealthKitService();
 
 interface FitnessState {
   // ── State ──
@@ -55,78 +57,42 @@ export const useFitnessStore = create<FitnessState>((set, get) => ({
       return false;
     }
     if (get().healthKitAuthorized) return true;
-    return new Promise((resolve) => {
-      const permissions = {
-        permissions: {
-          read: [
-            AppleHealthKit.Constants.Permissions.StepCount,
-            AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
-            AppleHealthKit.Constants.Permissions.AppleExerciseTime,
-          ],
-          write: [],
-        },
-      } as any;
 
-      AppleHealthKit.initHealthKit(permissions, (error: string) => {
-        if (error) {
-          console.log('[ERROR] Cannot grant permissions to Apple HealthKit', error);
-          set({ healthKitAuthorized: false });
-          resolve(false); // resolve anyway so app continues
-          return;
-        }
+    try {
+      const granted = await healthKit.initialize();
+      set({ healthKitAuthorized: granted });
+      if (granted) {
         console.log('[DEBUG] HealthKit permissions granted');
-        set({ healthKitAuthorized: true });
-        get().fetchHealthKitData().then(() => resolve(true));
-      });
-    });
+        await get().fetchHealthKitData();
+      }
+      return granted;
+    } catch (error) {
+      console.error('[ERROR] HealthKit initialization failed', error);
+      set({ healthKitAuthorized: false });
+      return false;
+    }
   },
 
   fetchHealthKitData: async () => {
-    if (Platform.OS !== 'ios') return;
-    const options: HealthInputOptions = {
-      date: new Date().toISOString(),
-      includeManuallyAdded: true,
-    };
+    if (!get().healthKitAuthorized) return;
 
-    let steps = 0;
-    let activeCalories = 0;
-    let exerciseMinutes = 0;
-
-    await new Promise<void>((resolve) => {
-      AppleHealthKit.getStepCount(options, (err: string, results: HealthValue) => {
-        if (!err && results) steps = results.value;
-        resolve();
-      });
-    });
-
-    await new Promise<void>((resolve) => {
-      AppleHealthKit.getActiveEnergyBurned(options, (err: string, results: HealthValue[]) => {
-        if (!err && results && results.length > 0) {
-          // getActiveEnergyBurned can return an array or single val depending on how called, summarize if array
-          activeCalories = results.reduce((sum, item) => sum + item.value, 0);
-        }
-        resolve();
-      });
-    });
-
-    await new Promise<void>((resolve) => {
-      AppleHealthKit.getAppleExerciseTime(options, (err: string, results: HealthValue[]) => {
-        if (!err && results && results.length > 0) {
-          exerciseMinutes = results.reduce((sum, item) => sum + item.value, 0);
-        }
-        resolve();
-      });
-    });
-
-    set((state) => ({
-      healthData: {
-        ...state.healthData,
-        steps: Math.round(steps),
-        activeCalories: Math.round(activeCalories),
-        exerciseMinutes: Math.round(exerciseMinutes),
-      },
-      lastSyncAt: new Date().toISOString(),
-    }));
+    try {
+      const steps = await healthKit.getTodaysSteps();
+      const activeCalories = await healthKit.getTodaysActiveCalories();
+      const exerciseMinutes = await healthKit.getTodaysExerciseMinutes();
+      
+      set((state) => ({
+        healthData: {
+          ...state.healthData,
+          steps,
+          activeCalories,
+          exerciseMinutes,
+        },
+        lastSyncAt: new Date().toISOString(),
+      }));
+    } catch (error) {
+      console.error('[ERROR] Fetching HealthKit data failed', error);
+    }
   },
 
   fetchTodaysWorkouts: async (userId) => {

@@ -292,7 +292,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       return true;
     } catch (error) {
-      const message = (error as Error).message || 'OAuth sign-in failed.';
+      let message = (error as Error).message || 'OAuth sign-in failed.';
+      
+      // Provide clearer instructions for common Supabase misconfigurations
+      if (message.includes('provider is not enabled')) {
+        message = `The ${provider} provider is not enabled in the Supabase Dashboard. Please go to Authentication > Providers and enable it.`;
+      }
+      
       set({ error: message, isLoading: false });
       return false;
     }

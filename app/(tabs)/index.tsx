@@ -26,9 +26,10 @@ export default function DashboardScreen() {
     const u = user as any;
     if (u?.user_metadata?.first_name) return u.user_metadata.first_name;
     if (u?.user_metadata?.full_name) return u.user_metadata.full_name.split(' ')[0];
+    if (u?.user_metadata?.name) return u.user_metadata.name.split(' ')[0];
     if (user?.displayName) return user.displayName.split(' ')[0];
     if (user?.email) return user.email.split('@')[0];
-    return 'Alex';
+    return 'User';
   };
   const userName = getFirstName();
 
@@ -115,9 +116,9 @@ export default function DashboardScreen() {
           <NestedActivityRings 
             moveVal={Math.max(healthData.activeCalories, dailyTotals.calories)} 
             moveTarget={user?.dailyCalorieTarget || 2200} 
-            exerciseVal={Math.max(healthData.exerciseMinutes, 15)} 
+            exerciseVal={healthData.exerciseMinutes} 
             exerciseTarget={30} 
-            standVal={8} 
+            standVal={0} // Stand data requires more complex HealthKit queries, setting to 0 for now as real value
             standTarget={12} 
             styles={styles} 
             isDark={isDark} 

@@ -2,7 +2,7 @@
  * Profile & Settings Screen — Matches Stitch "Profile & Settings" design
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,7 +38,7 @@ export default function ProfileScreen() {
   const styles = useMemo(() => createStyles(isDark), [isDark]);
 
   const { user, signOut } = useAuthStore();
-  const { healthKitAuthorized, initializeHealthKit, lastSyncAt, isSyncing } = useFitnessStore();
+  const { healthKitAuthorized, initializeHealthKit, lastSyncAt, isSyncing, healthData, todaysWorkouts, fetchTodaysWorkouts } = useFitnessStore();
   const {
     workoutRemindersEnabled,
     mealLoggingEnabled,
@@ -53,6 +53,12 @@ export default function ProfileScreen() {
   const [updatingWorkout, setUpdatingWorkout] = useState(false);
   const [updatingMeals, setUpdatingMeals] = useState(false);
   const [connectingDevice, setConnectingDevice] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchTodaysWorkouts(user.id);
+    }
+  }, [user?.id]);
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -151,8 +157,16 @@ export default function ProfileScreen() {
     }
   };
 
-  const displayName = user?.displayName ?? 'Alex';
-  const email = user?.email ?? 'alex@example.com';
+  const getDisplayName = () => {
+    const u = user as any;
+    if (u?.user_metadata?.full_name) return u.user_metadata.full_name;
+    if (u?.user_metadata?.name) return u.user_metadata.name;
+    if (user?.displayName) return user.displayName;
+    return 'User';
+  };
+
+  const displayName = getDisplayName();
+  const email = user?.email ?? 'user@example.com';
   const lastSyncLabel = lastSyncAt
     ? new Date(lastSyncAt).toLocaleString()
     : 'Not synced yet';
@@ -198,16 +212,16 @@ export default function ProfileScreen() {
         {/* Action Buttons Grid */}
         <View style={styles.quickActionsGrid}>
           <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/(tabs)/fitness')}>
-            <Text style={styles.quickActionCount}>31</Text>
-            <Text style={styles.quickActionLabel}>Workouts</Text>
+            <Text style={styles.quickActionCount}>{todaysWorkouts.length}</Text>
+            <Text style={styles.quickActionLabel}>Today</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/(tabs)/fitness')}>
-            <Text style={styles.quickActionCount}>14</Text>
-            <Text style={styles.quickActionLabel}>Day Streak</Text>
+            <Text style={styles.quickActionCount}>{Math.round(healthData.steps / 1000)}k</Text>
+            <Text style={styles.quickActionLabel}>Steps</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionCard} onPress={() => router.push('/(tabs)/nutrition')}>
-            <Text style={styles.quickActionCount}>4.2k</Text>
-            <Text style={styles.quickActionLabel}>Avg Kcal</Text>
+            <Text style={styles.quickActionCount}>{healthData.activeCalories}</Text>
+            <Text style={styles.quickActionLabel}>Active kcal</Text>
           </TouchableOpacity>
         </View>
 
